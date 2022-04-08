@@ -1,0 +1,41 @@
+name: CI
+on:
+  pull_request:
+  schedule:
+    - cron: "0 0 * * *"
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
+  RUST_BACKTRACE: short
+  MIRIFLAGS: -Zmiri-strict-provenance -Zmiri-symbolic-alignment-check
+
+jobs:
+  miri:
+    name: Run tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install nightly toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          profile: minimal
+          components: miri
+          override: true
+
+      - name: Setup miri
+        uses: actions-rs/cargo@v1
+        with:
+          command: miri
+          args: setup
+
+      - name: Run tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: miri
+          args: test
