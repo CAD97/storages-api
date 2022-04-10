@@ -343,7 +343,7 @@
 <span class="doccomment">/// the complexity to support it doesn&#39;t seem warranted? Such a function would</span>
 <span class="doccomment">/// live on this trait and could look like the following:</span>
 <span class="doccomment">///</span>
-<span class="doccomment">/// ```rust</span>
+<span class="doccomment">/// ```rust,compile_fail</span>
 <span class="doccomment">/// unsafe fn resolve_many_mut&lt;T: ?Sized, N: usize&gt;(</span>
 <span class="doccomment">///     &amp;mut self,</span>
 <span class="doccomment">///     handles: [Self::Handle&lt;T&gt;; N],</span>
