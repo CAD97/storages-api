@@ -7,6 +7,12 @@ use {
     },
 };
 
+/// A single storage which stores objects inline if it fits, otherwise falling
+/// back to using an [`Allocator`].
+///
+/// The `DataStore` type parameter determines the layout of the inline storage.
+/// (It would be nice to use `const LAYOUT: Layout` instead, but the needed
+/// features are currently a little *too* incomplete to be usable here.)
 pub struct SmallStorage<DataStore, A: Allocator> {
     inline: InlineStorage<DataStore>,
     outline: AllocStorage<A>,

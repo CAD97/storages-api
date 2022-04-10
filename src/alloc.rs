@@ -9,6 +9,7 @@ use {
     },
 };
 
+/// A storage that stores objects via an [`Allocator`].
 pub struct AllocStorage<A: Allocator> {
     alloc: A,
 }

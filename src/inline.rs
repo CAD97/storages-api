@@ -11,12 +11,16 @@ use {
     },
 };
 
-// Note: I would like to have `<const LAYOUT: Layout>` instead, but
-// feature(generic_const_exprs) is currently a little *too* incomplete
+/// A single storage which stores objects inline.
+///
+/// The `DataStore` type parameter determines the layout of the inline storage.
+/// (It would be nice to use `const LAYOUT: Layout` instead, but the needed
+/// features are currently a little *too* incomplete to be usable here.)
 pub struct InlineStorage<DataStore> {
     data: MaybeUninit<DataStore>,
 }
 
+/// A handle into an [`InlineStorage]`.
 pub struct InlineStorageHandle<T: ?Sized> {
     meta: <T as Pointee>::Metadata,
 }
