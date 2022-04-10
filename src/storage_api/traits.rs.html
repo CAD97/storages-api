@@ -176,9 +176,9 @@
         <span class="macro">debug_assert!</span>(<span class="ident">new_len</span> <span class="op">&lt;</span><span class="op">=</span> <span class="ident">old_len</span>, <span class="string">&quot;invalid arguments to Storage::grow&quot;</span>);
 
         <span class="ident">copy_nonoverlapping</span>(
-            <span class="ident">old_ptr</span>.<span class="ident">as_ptr</span>().<span class="ident">cast</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>(),
-            <span class="ident">new_ptr</span>.<span class="ident">as_ptr</span>().<span class="ident">cast</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>(),
-            <span class="ident">old_len</span>,
+            <span class="ident">old_ptr</span>.<span class="ident">as_ptr</span>().<span class="ident">cast</span>::<span class="op">&lt;</span><span class="ident">MaybeUninit</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span>(),
+            <span class="ident">new_ptr</span>.<span class="ident">as_ptr</span>().<span class="ident">cast</span>::<span class="op">&lt;</span><span class="ident">MaybeUninit</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span>(),
+            <span class="ident">new_len</span>,
         );
 
         <span class="self">self</span>.<span class="ident">destroy</span>(<span class="ident">old_handle</span>);
@@ -192,5 +192,5 @@
     }
 }
 </code></pre></div>
-</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="storage_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.62.0-nightly (f4a7ce997 2022-04-08)" ></div>
+</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="storage_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.62.0-nightly (8bf93e9b6 2022-04-09)" ></div>
 </body></html>
