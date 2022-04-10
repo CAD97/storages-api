@@ -60,6 +60,8 @@
 <span id="55">55</span>
 <span id="56">56</span>
 <span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
 </pre><pre class="rust"><code><span class="doccomment">//! A proof-of-concept implementation of (one version of) the storages proposal.</span>
 <span class="doccomment">//!</span>
 <span class="doccomment">//! Describing the raw storage API, we have:</span>
@@ -98,6 +100,7 @@
 
 <span class="kw">mod</span> <span class="ident">alloc</span>;
 <span class="kw">mod</span> <span class="ident">inline</span>;
+<span class="kw">mod</span> <span class="ident">one_use_arena</span>;
 <span class="kw">mod</span> <span class="ident">polyfill</span>;
 <span class="kw">mod</span> <span class="ident">raw_box</span>;
 <span class="kw">mod</span> <span class="ident">raw_vec</span>;
@@ -109,6 +112,7 @@
 <span class="kw">pub</span> <span class="kw">use</span> <span class="kw">crate</span>::{
     <span class="ident">alloc::AllocStorage</span>,
     <span class="ident">inline</span>::{<span class="ident">InlineStorage</span>, <span class="ident">InlineStorageHandle</span>},
+    <span class="ident">one_use_arena</span>::{<span class="ident">OneUseArenaStorage</span>, <span class="ident">OneUseArenaStorageHandle</span>},
     <span class="ident">raw_box::RawBox</span>,
     <span class="ident">raw_vec::RawVec</span>,
     <span class="ident">referenced</span>::{<span class="ident">RefStorage</span>, <span class="ident">RefStorageHandle</span>},

@@ -242,6 +242,52 @@
 <span id="237">237</span>
 <span id="238">238</span>
 <span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
+<span id="242">242</span>
+<span id="243">243</span>
+<span id="244">244</span>
+<span id="245">245</span>
+<span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">core</span>::{
     <span class="ident">alloc::AllocError</span>,
     <span class="ident">hash::Hash</span>,
@@ -382,9 +428,6 @@
 <span class="doccomment">/// Pointers returned from [`resolve`][Storage::resolve] are valid for writes.</span>
 <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">trait</span> <span class="ident">SharedMutabilityStorage</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span>: <span class="ident">Storage</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {}
 
-<span class="doccomment">/// A storage that provides stable handles.</span>
-<span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">trait</span> <span class="ident">StableStorage</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span>: <span class="ident">Storage</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {}
-
 <span class="doccomment">/// A storage that can reallocate to adjust the length of slice objects.</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// Automatically provided for any [`MultipleStorage`] by allocating a new</span>
@@ -432,7 +475,7 @@
     ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Handle</span>, <span class="ident">AllocError</span><span class="op">&gt;</span>;
 }
 
-<span class="ident">default</span> <span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">S</span>: <span class="ident">MultipleStorage</span><span class="op">&lt;</span>[<span class="ident">T</span>]<span class="op">&gt;</span><span class="op">&gt;</span> <span class="ident">SliceStorage</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">S</span> {
+<span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">S</span>: <span class="ident">MultipleStorage</span><span class="op">&lt;</span>[<span class="ident">T</span>]<span class="op">&gt;</span><span class="op">&gt;</span> <span class="ident">SliceStorage</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">S</span> {
     <span class="ident">default</span> <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">grow</span>(
         <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
         <span class="ident">old_handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span>,
@@ -481,6 +524,55 @@
 }
 
 <span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span> <span class="ident">Handle</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">NonNull</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {}
+
+<span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">S</span>: <span class="ident">Storage</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="ident">Storage</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;_</span> <span class="kw-2">mut</span> <span class="ident">S</span> {
+    <span class="kw">type</span> <span class="ident">Handle</span> <span class="op">=</span> <span class="ident">S::Handle</span>;
+
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">create</span>(
+        <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
+        <span class="ident">meta</span>: <span class="op">&lt;</span><span class="ident">T</span> <span class="kw">as</span> <span class="ident">Pointee</span><span class="op">&gt;</span><span class="ident">::Metadata</span>,
+    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Handle</span>, <span class="ident">AllocError</span><span class="op">&gt;</span> {
+        (<span class="kw-2">*</span><span class="kw-2">*</span><span class="self">self</span>).<span class="ident">create</span>(<span class="ident">meta</span>)
+    }
+
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">destroy</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span>) {
+        (<span class="kw-2">*</span><span class="kw-2">*</span><span class="self">self</span>).<span class="ident">destroy</span>(<span class="ident">handle</span>)
+    }
+
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">resolve_metadata</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span>) -&gt; <span class="op">&lt;</span><span class="ident">T</span> <span class="kw">as</span> <span class="ident">Pointee</span><span class="op">&gt;</span><span class="ident">::Metadata</span> {
+        (<span class="kw-2">*</span><span class="kw-2">*</span><span class="self">self</span>).<span class="ident">resolve_metadata</span>(<span class="ident">handle</span>)
+    }
+
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">resolve</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span>) -&gt; <span class="ident">NonNull</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
+        (<span class="kw-2">*</span><span class="kw-2">*</span><span class="self">self</span>).<span class="ident">resolve</span>(<span class="ident">handle</span>)
+    }
+
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">resolve_mut</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span>) -&gt; <span class="ident">NonNull</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
+        (<span class="kw-2">*</span><span class="kw-2">*</span><span class="self">self</span>).<span class="ident">resolve_mut</span>(<span class="ident">handle</span>)
+    }
+}
+
+<span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">S</span>: <span class="ident">SharedMutabilityStorage</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="ident">SharedMutabilityStorage</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;_</span> <span class="kw-2">mut</span> <span class="ident">S</span> {}
+<span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">S</span>: <span class="ident">MultipleStorage</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="ident">MultipleStorage</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;_</span> <span class="kw-2">mut</span> <span class="ident">S</span> {}
+<span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">S</span>: <span class="ident">PinningStorage</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="ident">PinningStorage</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;_</span> <span class="kw-2">mut</span> <span class="ident">S</span> {}
+
+<span class="comment">// unsafe impl&lt;T, S: SliceStorage&lt;T&gt;&gt; SliceStorage&lt;T&gt; for &amp;&#39;_ mut S {</span>
+<span class="comment">//     unsafe fn grow(</span>
+<span class="comment">//         &amp;mut self,</span>
+<span class="comment">//         handle: Self::Handle,</span>
+<span class="comment">//         new_len: usize,</span>
+<span class="comment">//     ) -&gt; Result&lt;Self::Handle, AllocError&gt; {</span>
+<span class="comment">//         (**self).grow(handle, new_len)</span>
+<span class="comment">//     }</span>
+
+<span class="comment">//     unsafe fn shrink(</span>
+<span class="comment">//         &amp;mut self,</span>
+<span class="comment">//         handle: Self::Handle,</span>
+<span class="comment">//         new_len: usize,</span>
+<span class="comment">//     ) -&gt; Result&lt;Self::Handle, AllocError&gt; {</span>
+<span class="comment">//         (**self).shrink(handle, new_len)</span>
+<span class="comment">//     }</span>
+<span class="comment">// }</span>
 </code></pre></div>
 </section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="storage_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.62.0-nightly (8bf93e9b6 2022-04-09)" ></div>
 </body></html>
