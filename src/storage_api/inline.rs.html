@@ -107,6 +107,10 @@
 <span id="102">102</span>
 <span id="103">103</span>
 <span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
 </pre><pre class="rust"><code><span class="kw">use</span> {
     <span class="kw">crate</span>::{
         <span class="ident">polyfill</span>::{<span class="ident">layout_fits_in</span>, <span class="ident">layout_for_meta</span>},
@@ -120,12 +124,16 @@
     },
 };
 
-<span class="comment">// Note: I would like to have `&lt;const LAYOUT: Layout&gt;` instead, but</span>
-<span class="comment">// feature(generic_const_exprs) is currently a little *too* incomplete</span>
+<span class="doccomment">/// A single storage which stores objects inline.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// The `DataStore` type parameter determines the layout of the inline storage.</span>
+<span class="doccomment">/// (It would be nice to use `const LAYOUT: Layout` instead, but the needed</span>
+<span class="doccomment">/// features are currently a little *too* incomplete to be usable here.)</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">InlineStorage</span><span class="op">&lt;</span><span class="ident">DataStore</span><span class="op">&gt;</span> {
     <span class="ident">data</span>: <span class="ident">MaybeUninit</span><span class="op">&lt;</span><span class="ident">DataStore</span><span class="op">&gt;</span>,
 }
 
+<span class="doccomment">/// A handle into an [`InlineStorage]`.</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">InlineStorageHandle</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span> {
     <span class="ident">meta</span>: <span class="op">&lt;</span><span class="ident">T</span> <span class="kw">as</span> <span class="ident">Pointee</span><span class="op">&gt;</span><span class="ident">::Metadata</span>,
 }

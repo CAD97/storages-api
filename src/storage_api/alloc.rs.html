@@ -78,6 +78,7 @@
 <span id="73">73</span>
 <span id="74">74</span>
 <span id="75">75</span>
+<span id="76">76</span>
 </pre><pre class="rust"><code><span class="kw">use</span> {
     <span class="kw">crate</span>::{
         <span class="ident">polyfill::layout_for_meta</span>, <span class="ident">Handle</span>, <span class="ident">MultipleStorage</span>, <span class="ident">PinningStorage</span>,
@@ -89,6 +90,7 @@
     },
 };
 
+<span class="doccomment">/// A storage that stores objects via an [`Allocator`].</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">AllocStorage</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">Allocator</span><span class="op">&gt;</span> {
     <span class="ident">alloc</span>: <span class="ident">A</span>,
 }
