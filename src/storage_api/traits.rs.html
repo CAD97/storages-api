@@ -234,6 +234,11 @@
 <span id="229">229</span>
 <span id="230">230</span>
 <span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
+<span id="236">236</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">core</span>::{
     <span class="ident">alloc::AllocError</span>,
     <span class="ident">mem::MaybeUninit</span>,
@@ -324,8 +329,13 @@
 
 <span class="doccomment">/// A storage that creates pinned handles.</span>
 <span class="doccomment">///</span>
-<span class="doccomment">/// Any objects created inside of this storage will not be moved and will not</span>
-<span class="doccomment">/// be deallocated until [`destroy`][Self::destroy] is called on their handle.</span>
+<span class="doccomment">/// Any objects created inside of this storage will not be moved nor their</span>
+<span class="doccomment">/// backing memory reused until [`destroy`] is called on their handle.</span>
+<span class="doccomment">/// (Equivalently: [`resolve`] and [`resolve_mut`] return `Pin&lt;NonNull&lt;T&gt;&gt;`).</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// [`destroy`]: Storage::destroy</span>
+<span class="doccomment">/// [`resolve`]: Storage::resolve</span>
+<span class="doccomment">/// [`resolve_mut`]: Storage::resolve_mut</span>
 <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">trait</span> <span class="ident">PinningStorage</span>: <span class="ident">Storage</span> {}
 
 <span class="doccomment">/// A storage that can create multiple handles.</span>
@@ -354,15 +364,15 @@
 <span class="doccomment">/// `resolve_mut` invalidates any references/pointers derived from the previous</span>
 <span class="doccomment">/// reborrow of `&amp;mut Storage`. This is fundamental to `&amp;mut` being `noalias`.)</span>
 <span class="doccomment">///</span>
-<span class="doccomment">/// [`create`]: Self::create</span>
-<span class="doccomment">/// [`destroy`]: Self::destroy</span>
-<span class="doccomment">/// [`resolve`]: Self::resolve</span>
-<span class="doccomment">/// [`resolve_mut`]: Self::resolve_mut</span>
+<span class="doccomment">/// [`create`]: Storage::create</span>
+<span class="doccomment">/// [`destroy`]: Storage::destroy</span>
+<span class="doccomment">/// [`resolve`]: Storage::resolve</span>
+<span class="doccomment">/// [`resolve_mut`]: Storage::resolve_mut</span>
 <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">trait</span> <span class="ident">MultipleStorage</span>: <span class="ident">Storage</span> {}
 
 <span class="doccomment">/// A storage that serves as a uniqueness barrier.</span>
 <span class="doccomment">///</span>
-<span class="doccomment">/// Pointers returned from [`resolve`][Self::resolve] are valid for writes.</span>
+<span class="doccomment">/// Pointers returned from [`resolve`][Storage::resolve] are valid for writes.</span>
 <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">trait</span> <span class="ident">SharedMutabilityStorage</span>: <span class="ident">Storage</span> {}
 
 <span class="doccomment">/// A storage that can reallocate to adjust the length of slice objects.</span>
