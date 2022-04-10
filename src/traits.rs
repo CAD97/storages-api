@@ -138,9 +138,6 @@ pub unsafe trait MultipleStorage<T: ?Sized>: Storage<T> {}
 /// Pointers returned from [`resolve`][Storage::resolve] are valid for writes.
 pub unsafe trait SharedMutabilityStorage<T: ?Sized>: Storage<T> {}
 
-/// A storage that provides stable handles.
-pub unsafe trait StableStorage<T: ?Sized>: Storage<T> {}
-
 /// A storage that can reallocate to adjust the length of slice objects.
 ///
 /// Automatically provided for any [`MultipleStorage`] by allocating a new
@@ -188,7 +185,7 @@ pub unsafe trait SliceStorage<T>: Storage<[T]> {
     ) -> Result<Self::Handle, AllocError>;
 }
 
-default unsafe impl<T, S: MultipleStorage<[T]>> SliceStorage<T> for S {
+unsafe impl<T, S: MultipleStorage<[T]>> SliceStorage<T> for S {
     default unsafe fn grow(
         &mut self,
         old_handle: Self::Handle,
@@ -237,3 +234,52 @@ default unsafe impl<T, S: MultipleStorage<[T]>> SliceStorage<T> for S {
 }
 
 unsafe impl<T: ?Sized> Handle<T> for NonNull<T> {}
+
+unsafe impl<T: ?Sized, S: Storage<T>> Storage<T> for &'_ mut S {
+    type Handle = S::Handle;
+
+    unsafe fn create(
+        &mut self,
+        meta: <T as Pointee>::Metadata,
+    ) -> Result<Self::Handle, AllocError> {
+        (**self).create(meta)
+    }
+
+    unsafe fn destroy(&mut self, handle: Self::Handle) {
+        (**self).destroy(handle)
+    }
+
+    unsafe fn resolve_metadata(&self, handle: Self::Handle) -> <T as Pointee>::Metadata {
+        (**self).resolve_metadata(handle)
+    }
+
+    unsafe fn resolve(&self, handle: Self::Handle) -> NonNull<T> {
+        (**self).resolve(handle)
+    }
+
+    unsafe fn resolve_mut(&mut self, handle: Self::Handle) -> NonNull<T> {
+        (**self).resolve_mut(handle)
+    }
+}
+
+unsafe impl<T: ?Sized, S: SharedMutabilityStorage<T>> SharedMutabilityStorage<T> for &'_ mut S {}
+unsafe impl<T: ?Sized, S: MultipleStorage<T>> MultipleStorage<T> for &'_ mut S {}
+unsafe impl<T: ?Sized, S: PinningStorage<T>> PinningStorage<T> for &'_ mut S {}
+
+// unsafe impl<T, S: SliceStorage<T>> SliceStorage<T> for &'_ mut S {
+//     unsafe fn grow(
+//         &mut self,
+//         handle: Self::Handle,
+//         new_len: usize,
+//     ) -> Result<Self::Handle, AllocError> {
+//         (**self).grow(handle, new_len)
+//     }
+
+//     unsafe fn shrink(
+//         &mut self,
+//         handle: Self::Handle,
+//         new_len: usize,
+//     ) -> Result<Self::Handle, AllocError> {
+//         (**self).shrink(handle, new_len)
+//     }
+// }
