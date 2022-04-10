@@ -72,13 +72,7 @@
 <span id="67">67</span>
 <span id="68">68</span>
 <span id="69">69</span>
-<span id="70">70</span>
-<span id="71">71</span>
-<span id="72">72</span>
-</pre><pre class="rust"><code><span class="kw">use</span> {
-    <span class="kw">crate</span>::{<span class="ident">Handle</span>, <span class="ident">SliceStorage</span>},
-    <span class="ident">core::alloc::AllocError</span>,
-};
+</pre><pre class="rust"><code><span class="kw">use</span> {<span class="ident"><span class="kw">crate</span>::SliceStorage</span>, <span class="ident">core::alloc::AllocError</span>};
 
 <span class="doccomment">/// A raw vec around some slice storage. Bundles the storage and its handle.</span>
 <span class="doccomment">///</span>
@@ -86,12 +80,12 @@
 <span class="doccomment">/// raw vec handles amortized growth; this raw vec just does exactly as asked.</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// [alloc&#39;s `RawVec`]: https://github.com/rust-lang/rust/blob/master/library/alloc/src/raw_vec.rs</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">RawVec</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">S</span>: <span class="ident">SliceStorage</span><span class="op">&gt;</span> {
-    <span class="ident">handle</span>: <span class="ident">S::Handle</span><span class="op">&lt;</span>[<span class="ident">T</span>]<span class="op">&gt;</span>,
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">RawVec</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">S</span>: <span class="ident">SliceStorage</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+    <span class="ident">handle</span>: <span class="ident">S::Handle</span>,
     <span class="ident">storage</span>: <span class="ident">S</span>,
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">S</span>: <span class="ident">SliceStorage</span><span class="op">&gt;</span> <span class="ident">RawVec</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">S</span><span class="op">&gt;</span> {
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">S</span>: <span class="ident">SliceStorage</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="ident">RawVec</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">S</span><span class="op">&gt;</span> {
     <span class="doccomment">/// Create a new empty growable slice in the given storage.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="kw-2">mut</span> <span class="ident">storage</span>: <span class="ident">S</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">S</span><span class="op">&gt;</span> {
         <span class="kw">match</span> <span class="kw">unsafe</span> { <span class="ident">storage</span>.<span class="ident">create</span>(<span class="number">0</span>) } {
@@ -116,7 +110,7 @@
 
     <span class="doccomment">/// Get the length of the slice.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">len</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">usize</span> {
-        <span class="self">self</span>.<span class="ident">handle</span>.<span class="ident">metadata</span>()
+        <span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">storage</span>.<span class="ident">resolve_metadata</span>(<span class="self">self</span>.<span class="ident">handle</span>) }
     }
 
     <span class="doccomment">/// Grow the length of the slice to `new_len`. Does not change the length</span>
@@ -142,7 +136,7 @@
     }
 }
 
-<span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="attribute">#[<span class="ident">may_dangle</span>]</span> <span class="ident">T</span>, <span class="ident">S</span>: <span class="ident">SliceStorage</span><span class="op">&gt;</span> <span class="ident">Drop</span> <span class="kw">for</span> <span class="ident">RawVec</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">S</span><span class="op">&gt;</span> {
+<span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="attribute">#[<span class="ident">may_dangle</span>]</span> <span class="ident">T</span>, <span class="ident">S</span>: <span class="ident">SliceStorage</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="ident">Drop</span> <span class="kw">for</span> <span class="ident">RawVec</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">S</span><span class="op">&gt;</span> {
     <span class="kw">fn</span> <span class="ident">drop</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) {
         <span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">storage</span>.<span class="ident">destroy</span>(<span class="self">self</span>.<span class="ident">handle</span>) }
     }
