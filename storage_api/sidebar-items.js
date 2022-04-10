@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["AllocStorage",""],["InlineStorage",""],["InlineStorageHandle",""],["RawBox",""],["RawVec",""],["SmallStorage",""],["SmallStorageHandle",""]],"trait":[["Handle",""],["MultipleStorage",""],["PinningStorage",""],["SharedMutabilityStorage",""],["SliceStorage",""],["Storage",""]]});
