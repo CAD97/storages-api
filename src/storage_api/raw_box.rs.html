@@ -39,17 +39,60 @@
 <span id="34">34</span>
 <span id="35">35</span>
 <span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
+<span id="45">45</span>
+<span id="46">46</span>
+<span id="47">47</span>
+<span id="48">48</span>
+<span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
+<span id="53">53</span>
+<span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
 </pre><pre class="rust"><code><span class="kw">use</span> {
     <span class="kw">crate</span>::{<span class="ident">Handle</span>, <span class="ident">Storage</span>},
     <span class="ident">core</span>::{<span class="ident">alloc::AllocError</span>, <span class="ident">ptr::Pointee</span>},
 };
 
+<span class="doccomment">/// A raw box around some storage. Bundles the storage and its handle.</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">RawBox</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">S</span>: <span class="ident">Storage</span><span class="op">&gt;</span> {
     <span class="ident">handle</span>: <span class="ident">S::Handle</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>,
     <span class="ident">storage</span>: <span class="ident">S</span>,
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">S</span>: <span class="ident">Storage</span><span class="op">&gt;</span> <span class="ident">RawBox</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">S</span><span class="op">&gt;</span> {
+    <span class="doccomment">/// Create a new box for the object described by the given metadata.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// The object is not initialized.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// (Do we want a `new_zeroed`?)</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// # Safety</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// - The metadata must describe a layout valid for a rust object.</span>
+    <span class="doccomment">///   - This exists due to the safety requirements of `size_of_val_raw`</span>
+    <span class="doccomment">///     and `align_of_val_raw`. I think we need a way to go compute layout</span>
+    <span class="doccomment">///     from metadata safely, with a check that it produces a valid layout.</span>
+    <span class="doccomment">///   - On each unsized kind, this would imply:</span>
+    <span class="doccomment">///     - slices: size computation uses saturating/checked multiplication</span>
+    <span class="doccomment">///     - traits: vtable must always be valid (as a safety invariant)</span>
+    <span class="doccomment">///     - composites: size computation uses saturating/checked addition</span>
+    <span class="doccomment">///     - externs: any valid metadata must compute valid size/align or None</span>
     <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">meta</span>: <span class="op">&lt;</span><span class="ident">T</span> <span class="kw">as</span> <span class="ident">Pointee</span><span class="op">&gt;</span><span class="ident">::Metadata</span>, <span class="kw-2">mut</span> <span class="ident">storage</span>: <span class="ident">S</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">S</span><span class="op">&gt;</span> {
         <span class="kw">match</span> <span class="ident">storage</span>.<span class="ident">create</span>(<span class="ident">meta</span>) {
             <span class="prelude-val">Ok</span>(<span class="ident">handle</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="ident">RawBox</span> { <span class="ident">handle</span>, <span class="ident">storage</span> }),
@@ -57,14 +100,21 @@
         }
     }
 
+    <span class="doccomment">/// Get a pointer valid *for reads only* to the object.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// The pointer is invalidated when the box is moved or used mutably.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">as_ptr</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">*const</span> <span class="ident">T</span> {
         <span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">storage</span>.<span class="ident">resolve</span>(<span class="self">self</span>.<span class="ident">handle</span>).<span class="ident">as_ptr</span>() }
     }
 
+    <span class="doccomment">/// Get a pointer valid for reads and writes to the object.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// The pointer is invalidated when the box is moved or used mutably.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">as_mut_ptr</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="kw-2">*mut</span> <span class="ident">T</span> {
         <span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">storage</span>.<span class="ident">resolve_mut</span>(<span class="self">self</span>.<span class="ident">handle</span>).<span class="ident">as_ptr</span>() }
     }
 
+    <span class="doccomment">/// Get the metadata of the inner object.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">metadata</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="op">&lt;</span><span class="ident">T</span> <span class="kw">as</span> <span class="ident">Pointee</span><span class="op">&gt;</span><span class="ident">::Metadata</span> {
         <span class="self">self</span>.<span class="ident">handle</span>.<span class="ident">metadata</span>()
     }
