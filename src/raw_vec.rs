@@ -38,7 +38,7 @@ impl<T, S: SliceStorage> RawVec<T, S> {
     }
 
     pub fn shrink_to(&mut self, new_len: usize) -> Result<(), AllocError> {
-        if new_len <= self.len() {
+        if new_len >= self.len() {
             Ok(())
         } else {
             self.handle = unsafe { self.storage.shrink(self.handle, new_len) }?;
