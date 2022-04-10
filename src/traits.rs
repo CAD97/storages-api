@@ -77,9 +77,9 @@ default unsafe impl<S: MultipleStorage> SliceStorage for S {
         debug_assert!(new_len <= old_len, "invalid arguments to Storage::grow");
 
         copy_nonoverlapping(
-            old_ptr.as_ptr().cast::<T>(),
-            new_ptr.as_ptr().cast::<T>(),
-            old_len,
+            old_ptr.as_ptr().cast::<MaybeUninit<T>>(),
+            new_ptr.as_ptr().cast::<MaybeUninit<T>>(),
+            new_len,
         );
 
         self.destroy(old_handle);
