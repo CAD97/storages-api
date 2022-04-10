@@ -88,8 +88,13 @@ pub unsafe trait Storage {
 
 /// A storage that creates pinned handles.
 ///
-/// Any objects created inside of this storage will not be moved and will not
-/// be deallocated until [`destroy`][Self::destroy] is called on their handle.
+/// Any objects created inside of this storage will not be moved nor their
+/// backing memory reused until [`destroy`] is called on their handle.
+/// (Equivalently: [`resolve`] and [`resolve_mut`] return `Pin<NonNull<T>>`).
+///
+/// [`destroy`]: Storage::destroy
+/// [`resolve`]: Storage::resolve
+/// [`resolve_mut`]: Storage::resolve_mut
 pub unsafe trait PinningStorage: Storage {}
 
 /// A storage that can create multiple handles.
@@ -118,15 +123,15 @@ pub unsafe trait PinningStorage: Storage {}
 /// `resolve_mut` invalidates any references/pointers derived from the previous
 /// reborrow of `&mut Storage`. This is fundamental to `&mut` being `noalias`.)
 ///
-/// [`create`]: Self::create
-/// [`destroy`]: Self::destroy
-/// [`resolve`]: Self::resolve
-/// [`resolve_mut`]: Self::resolve_mut
+/// [`create`]: Storage::create
+/// [`destroy`]: Storage::destroy
+/// [`resolve`]: Storage::resolve
+/// [`resolve_mut`]: Storage::resolve_mut
 pub unsafe trait MultipleStorage: Storage {}
 
 /// A storage that serves as a uniqueness barrier.
 ///
-/// Pointers returned from [`resolve`][Self::resolve] are valid for writes.
+/// Pointers returned from [`resolve`][Storage::resolve] are valid for writes.
 pub unsafe trait SharedMutabilityStorage: Storage {}
 
 /// A storage that can reallocate to adjust the length of slice objects.
