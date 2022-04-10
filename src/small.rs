@@ -3,6 +3,7 @@ use {
     core::{
         alloc::{AllocError, Allocator},
         cmp::Ordering,
+        hash::{Hash, Hasher},
         ptr::{NonNull, Pointee},
     },
 };
@@ -31,28 +32,27 @@ impl<DataStore, A: Allocator> SmallStorage<DataStore, A> {
     }
 }
 
-unsafe impl<DataStore, A: Allocator> Storage for SmallStorage<DataStore, A> {
-    type Handle<T: ?Sized> = SmallStorageHandle<T>;
+unsafe impl<DataStore, A: Allocator, T: ?Sized> Storage<T> for SmallStorage<DataStore, A> {
+    type Handle = SmallStorageHandle<T>;
 
-    unsafe fn create<T: ?Sized>(
+    unsafe fn create(
         &mut self,
         meta: <T as core::ptr::Pointee>::Metadata,
-    ) -> Result<Self::Handle<T>, AllocError> {
+    ) -> Result<Self::Handle, AllocError> {
         if self.inline.fits::<T>(meta) {
-            self.inline.create::<T>(meta)?;
+            Storage::<T>::create(&mut self.inline, meta)?;
             Ok(SmallStorageHandle { meta })
         } else {
-            let (addr, _) = self.outline.create::<T>(meta)?.to_raw_parts();
-            let addr_handle = self.inline.create::<NonNull<()>>(())?;
+            let (addr, _) = Storage::<T>::create(&mut self.outline, meta)?.to_raw_parts();
+            let addr_handle = self.inline.create(())?;
             *self.inline.resolve_mut(addr_handle).as_ptr() = addr;
             Ok(SmallStorageHandle { meta })
         }
     }
 
-    unsafe fn destroy<T: ?Sized>(&mut self, handle: Self::Handle<T>) {
+    unsafe fn destroy(&mut self, handle: Self::Handle) {
         if self.inline.fits::<T>(handle.meta) {
-            self.inline
-                .destroy::<T>(InlineStorageHandle::new(handle.meta))
+            Storage::<T>::destroy(&mut self.inline, InlineStorageHandle::new(handle.meta));
         } else {
             let addr_handle = InlineStorageHandle::<NonNull<()>>::new(());
             let addr = *self.inline.resolve(addr_handle).as_ref();
@@ -62,36 +62,36 @@ unsafe impl<DataStore, A: Allocator> Storage for SmallStorage<DataStore, A> {
         }
     }
 
-    unsafe fn resolve<T: ?Sized>(&self, handle: Self::Handle<T>) -> NonNull<T> {
+    unsafe fn resolve_metadata(&self, handle: Self::Handle) -> <T as Pointee>::Metadata {
+        handle.meta
+    }
+
+    unsafe fn resolve(&self, handle: Self::Handle) -> NonNull<T> {
+        let meta = handle.meta;
         if self.inline.fits::<T>(handle.meta) {
-            self.inline
-                .resolve::<T>(InlineStorageHandle::new(handle.meta))
+            self.inline.resolve(InlineStorageHandle::new(meta))
         } else {
             let addr_handle = InlineStorageHandle::<NonNull<()>>::new(());
             let addr = *self.inline.resolve(addr_handle).as_ref();
-            let ptr = NonNull::<T>::from_raw_parts(addr, handle.meta);
+            let ptr = NonNull::<T>::from_raw_parts(addr, meta);
             self.outline.resolve(ptr)
         }
     }
 
-    unsafe fn resolve_mut<T: ?Sized>(&mut self, handle: Self::Handle<T>) -> NonNull<T> {
+    unsafe fn resolve_mut(&mut self, handle: Self::Handle) -> NonNull<T> {
+        let meta = handle.meta;
         if self.inline.fits::<T>(handle.meta) {
-            self.inline
-                .resolve_mut::<T>(InlineStorageHandle::new(handle.meta))
+            self.inline.resolve_mut(InlineStorageHandle::new(meta))
         } else {
             let addr_handle = InlineStorageHandle::<NonNull<()>>::new(());
             let addr = *self.inline.resolve(addr_handle).as_ref();
-            let ptr = NonNull::<T>::from_raw_parts(addr, handle.meta);
+            let ptr = NonNull::<T>::from_raw_parts(addr, meta);
             self.outline.resolve_mut(ptr)
         }
     }
 }
 
-unsafe impl<T: ?Sized> Handle<T> for SmallStorageHandle<T> {
-    fn metadata(self) -> <T as Pointee>::Metadata {
-        self.meta
-    }
-}
+unsafe impl<T: ?Sized> Handle<T> for SmallStorageHandle<T> {}
 
 impl<T: ?Sized> SmallStorageHandle<T> {
     pub fn new(meta: <T as Pointee>::Metadata) -> Self {
@@ -122,5 +122,11 @@ impl<T: ?Sized> PartialOrd for SmallStorageHandle<T> {
 impl<T: ?Sized> Ord for SmallStorageHandle<T> {
     fn cmp(&self, rhs: &Self) -> Ordering {
         self.meta.cmp(&rhs.meta)
+    }
+}
+
+impl<T: ?Sized> Hash for SmallStorageHandle<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.meta.hash(state)
     }
 }
