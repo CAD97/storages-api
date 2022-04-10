@@ -1,3 +1,23 @@
+//! A proof-of-concept implementation of (one version of) the storages proposal.
+//!
+//! Describing the raw storage API, we have:
+//!
+//! - [`Storage`]: a storage that can store objects
+//! - [`SliceStorage`]: a storage for growable slices
+//! - [`MultipleStorage`]: a storage that can store multiple objects
+//! - [`SharedMutabilityStorage`] and [`PinningStorage`]
+//!
+//! Providing a safe wrapper around `Storage` use (up to uninit memory):
+//!
+//! - [`RawBox`]: a raw (uninit payload) version of std `Box`
+//! - [`RawVec`]: a raw (uninit payload) version of std `Vec`
+//!
+//! Useful implementations of [`Storage`]:
+//!
+//! - [`InlineStorage`]: single storage located in the storage's bytes
+//! - [`AllocStorage`]: full-featured storage via allocation
+//! - [`SmallStorage`]: inline storage with a fallback to allocation
+
 #![no_std]
 #![feature(
     allocator_api,
