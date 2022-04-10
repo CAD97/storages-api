@@ -107,7 +107,7 @@ pub unsafe trait PinningStorage: Storage {}
 /// the complexity to support it doesn't seem warranted? Such a function would
 /// live on this trait and could look like the following:
 ///
-/// ```rust
+/// ```rust,compile_fail
 /// unsafe fn resolve_many_mut<T: ?Sized, N: usize>(
 ///     &mut self,
 ///     handles: [Self::Handle<T>; N],
