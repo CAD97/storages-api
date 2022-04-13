@@ -59,9 +59,6 @@
 <span id="54">54</span>
 <span id="55">55</span>
 <span id="56">56</span>
-<span id="57">57</span>
-<span id="58">58</span>
-<span id="59">59</span>
 </pre><pre class="rust"><code><span class="doccomment">//! A proof-of-concept implementation of (one version of) the storages proposal.</span>
 <span class="doccomment">//!</span>
 <span class="doccomment">//! Describing the raw storage API, we have:</span>
@@ -86,6 +83,7 @@
 <span class="attribute">#![<span class="ident">feature</span>(
     <span class="ident">allocator_api</span>,
     <span class="ident">dropck_eyepatch</span>,
+    <span class="ident">generic_associated_types</span>,
     <span class="ident">layout_for_ptr</span>,
     <span class="ident">specialization</span>,
     <span class="ident">ptr_metadata</span>
@@ -100,11 +98,9 @@
 
 <span class="kw">mod</span> <span class="ident">alloc</span>;
 <span class="kw">mod</span> <span class="ident">inline</span>;
-<span class="kw">mod</span> <span class="ident">one_use_arena</span>;
 <span class="kw">mod</span> <span class="ident">polyfill</span>;
 <span class="kw">mod</span> <span class="ident">raw_box</span>;
 <span class="kw">mod</span> <span class="ident">raw_vec</span>;
-<span class="kw">mod</span> <span class="ident">referenced</span>;
 <span class="kw">mod</span> <span class="ident">small</span>;
 <span class="kw">mod</span> <span class="ident">traits</span>;
 
@@ -112,15 +108,13 @@
 <span class="kw">pub</span> <span class="kw">use</span> <span class="kw">crate</span>::{
     <span class="ident">alloc::AllocStorage</span>,
     <span class="ident">inline</span>::{<span class="ident">InlineStorage</span>, <span class="ident">InlineStorageHandle</span>},
-    <span class="ident">one_use_arena</span>::{<span class="ident">OneUseArenaStorage</span>, <span class="ident">OneUseArenaStorageHandle</span>},
     <span class="ident">raw_box::RawBox</span>,
     <span class="ident">raw_vec::RawVec</span>,
-    <span class="ident">referenced</span>::{<span class="ident">RefStorage</span>, <span class="ident">RefStorageHandle</span>},
     <span class="ident">small</span>::{<span class="ident">SmallStorage</span>, <span class="ident">SmallStorageHandle</span>},
     <span class="ident">traits</span>::{
         <span class="ident">Handle</span>, <span class="ident">MultipleStorage</span>, <span class="ident">PinningStorage</span>, <span class="ident">SharedMutabilityStorage</span>, <span class="ident">SliceStorage</span>, <span class="ident">Storage</span>,
     },
 };
 </code></pre></div>
-</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="storage_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.62.0-nightly (8bf93e9b6 2022-04-09)" ></div>
+</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="storage_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.62.0-nightly (52ca603da 2022-04-12)" ></div>
 </body></html>
