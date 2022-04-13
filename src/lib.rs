@@ -2,10 +2,9 @@
 //!
 //! Describing the raw storage API, we have:
 //!
-//! - [`Storage`]: a storage that can store objects
-//! - [`SliceStorage`]: a storage for growable slices
-//! - [`MultipleStorage`]: a storage that can store multiple objects
-//! - [`SharedMutabilityStorage`] and [`PinningStorage`]
+//! - [`Storage`]: a storage that manages a single memory allocation
+//! - [`MultipleStorage`]: a storage that can manage multiple handles
+//! - [`SharedMutabilityStorage`] and [`PinningStorage`] for advanced use
 //!
 //! Providing a safe wrapper around `Storage` use (up to uninit memory):
 //!
@@ -22,15 +21,19 @@
 #![feature(
     allocator_api,
     dropck_eyepatch,
-    generic_associated_types,
+    extern_types,
     layout_for_ptr,
+    let_chains,
+    maybe_uninit_array_assume_init,
     specialization,
     ptr_metadata
 )]
 #![allow(
     clippy::len_without_is_empty,
     clippy::missing_safety_doc,
+    clippy::mut_from_ref,
     clippy::new_without_default,
+    clippy::should_implement_trait,
     incomplete_features,
     unused_unsafe
 )]
@@ -46,11 +49,9 @@ mod traits;
 #[doc(inline)]
 pub use crate::{
     alloc::AllocStorage,
-    inline::{InlineStorage, InlineStorageHandle},
+    inline::InlineStorage,
     raw_box::RawBox,
     raw_vec::RawVec,
-    small::{SmallStorage, SmallStorageHandle},
-    traits::{
-        Handle, MultipleStorage, PinningStorage, SharedMutabilityStorage, SliceStorage, Storage,
-    },
+    small::SmallStorage,
+    traits::{Memory, MultipleStorage, PinningStorage, SharedMutabilityStorage, Storage},
 };

@@ -1,28 +1,19 @@
 use {
-    crate::{
-        polyfill::{layout_fits_in, layout_for_meta},
-        Handle, Storage,
-    },
+    crate::{polyfill::layout_fits_in, Memory, Storage},
     core::{
         alloc::{AllocError, Layout},
-        cmp::Ordering,
         mem::MaybeUninit,
-        ptr::{NonNull, Pointee},
+        ptr,
     },
 };
 
-/// A single storage which stores objects inline.
+/// A single storage which stores memory inline.
 ///
 /// The `DataStore` type parameter determines the layout of the inline storage.
 /// (It would be nice to use `const LAYOUT: Layout` instead, but the needed
-/// features are currently a little *too* incomplete to be usable here.)
+/// features are currently a little *too* incomplete to be usable here yet.)
 pub struct InlineStorage<DataStore> {
     data: MaybeUninit<DataStore>,
-}
-
-/// A handle into an [`InlineStorage]`.
-pub struct InlineStorageHandle<T: ?Sized> {
-    meta: <T as Pointee>::Metadata,
 }
 
 impl<DataStore> InlineStorage<DataStore> {
@@ -32,77 +23,53 @@ impl<DataStore> InlineStorage<DataStore> {
         }
     }
 
-    pub fn fits<T: ?Sized>(&self, meta: <T as core::ptr::Pointee>::Metadata) -> bool {
+    pub fn fits(&self, needed_layout: Layout) -> bool {
         let available_layout = Layout::new::<DataStore>();
-        layout_for_meta::<T>(meta).map_or(false, |needed_layout| {
-            layout_fits_in(needed_layout, available_layout)
-        })
+        layout_fits_in(needed_layout, available_layout)
     }
 }
 
 unsafe impl<DataStore> Storage for InlineStorage<DataStore> {
-    type Handle<T: ?Sized> = InlineStorageHandle<T>;
+    type Handle = ();
 
-    unsafe fn create<T: ?Sized>(
-        &mut self,
-        meta: <T as core::ptr::Pointee>::Metadata,
-    ) -> Result<Self::Handle<T>, AllocError> {
-        let available_layout = Layout::new::<DataStore>();
-        let needed_layout = layout_for_meta::<T>(meta).ok_or(AllocError)?;
-        if layout_fits_in(needed_layout, available_layout) {
-            Ok(InlineStorageHandle { meta })
+    fn allocate(&mut self, layout: Layout) -> Result<Self::Handle, AllocError> {
+        if self.fits(layout) {
+            Ok(())
         } else {
             Err(AllocError)
         }
     }
 
-    unsafe fn destroy<T: ?Sized>(&mut self, _handle: Self::Handle<T>) {}
+    unsafe fn deallocate(&mut self, _handle: Self::Handle, _layout: Layout) {}
 
-    unsafe fn resolve<T: ?Sized>(&self, handle: Self::Handle<T>) -> NonNull<T> {
-        let ptr = NonNull::new_unchecked(self.data.as_ptr() as *mut ());
-        NonNull::from_raw_parts(ptr.cast(), handle.meta)
+    unsafe fn resolve(&self, _handle: Self::Handle, layout: Layout) -> &Memory {
+        &*ptr::from_raw_parts(self.data.as_ptr().cast(), layout.size())
     }
 
-    unsafe fn resolve_mut<T: ?Sized>(&mut self, handle: Self::Handle<T>) -> NonNull<T> {
-        let ptr = NonNull::new_unchecked(self.data.as_mut_ptr() as *mut ());
-        NonNull::from_raw_parts(ptr, handle.meta)
+    unsafe fn resolve_mut(&mut self, _handle: Self::Handle, layout: Layout) -> &mut Memory {
+        &mut *ptr::from_raw_parts_mut(self.data.as_mut_ptr().cast(), layout.size())
     }
-}
 
-unsafe impl<T: ?Sized> Handle<T> for InlineStorageHandle<T> {
-    fn metadata(self) -> <T as Pointee>::Metadata {
-        self.meta
+    unsafe fn grow(
+        &mut self,
+        handle: Self::Handle,
+        _old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<Self::Handle, AllocError> {
+        if self.fits(new_layout) {
+            Ok(handle)
+        } else {
+            Err(AllocError)
+        }
     }
-}
 
-impl<T: ?Sized> InlineStorageHandle<T> {
-    pub fn new(meta: <T as Pointee>::Metadata) -> Self {
-        InlineStorageHandle { meta }
-    }
-}
-
-impl<T: ?Sized> Copy for InlineStorageHandle<T> {}
-impl<T: ?Sized> Clone for InlineStorageHandle<T> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<T: ?Sized> Eq for InlineStorageHandle<T> {}
-impl<T: ?Sized> PartialEq for InlineStorageHandle<T> {
-    fn eq(&self, rhs: &Self) -> bool {
-        self.meta == rhs.meta
-    }
-}
-
-impl<T: ?Sized> PartialOrd for InlineStorageHandle<T> {
-    fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
-        Some(self.cmp(rhs))
-    }
-}
-
-impl<T: ?Sized> Ord for InlineStorageHandle<T> {
-    fn cmp(&self, rhs: &Self) -> Ordering {
-        self.meta.cmp(&rhs.meta)
+    unsafe fn shrink(
+        &mut self,
+        handle: Self::Handle,
+        _old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<Self::Handle, AllocError> {
+        debug_assert!(self.fits(new_layout));
+        Ok(handle)
     }
 }

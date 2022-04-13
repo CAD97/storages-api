@@ -1,13 +1,13 @@
 use {
-    crate::{AllocStorage, Handle, InlineStorage, InlineStorageHandle, Storage},
+    crate::{AllocStorage, InlineStorage, Memory, Storage},
     core::{
-        alloc::{AllocError, Allocator},
-        cmp::Ordering,
-        ptr::{NonNull, Pointee},
+        alloc::{AllocError, Allocator, Layout},
+        hint::unreachable_unchecked,
+        ptr::copy_nonoverlapping,
     },
 };
 
-/// A single storage which stores objects inline if it fits, otherwise falling
+/// A single storage which stores memory inline if it fits, otherwise falling
 /// back to using an [`Allocator`].
 ///
 /// The `DataStore` type parameter determines the layout of the inline storage.
@@ -18,10 +18,6 @@ pub struct SmallStorage<DataStore, A: Allocator> {
     outline: AllocStorage<A>,
 }
 
-pub struct SmallStorageHandle<T: ?Sized> {
-    meta: <T as Pointee>::Metadata,
-}
-
 impl<DataStore, A: Allocator> SmallStorage<DataStore, A> {
     pub fn new(alloc: A) -> Self {
         Self {
@@ -29,98 +25,139 @@ impl<DataStore, A: Allocator> SmallStorage<DataStore, A> {
             outline: AllocStorage::new(alloc),
         }
     }
+
+    const OUTLINE_HANDLE_LAYOUT: Layout = Layout::new::<<AllocStorage<A> as Storage>::Handle>();
 }
 
 unsafe impl<DataStore, A: Allocator> Storage for SmallStorage<DataStore, A> {
-    type Handle<T: ?Sized> = SmallStorageHandle<T>;
+    type Handle = ();
 
-    unsafe fn create<T: ?Sized>(
+    fn allocate(&mut self, layout: Layout) -> Result<Self::Handle, AllocError> {
+        if self.inline.fits(layout) {
+            self.inline.allocate(layout)
+        } else {
+            let addr = self.outline.allocate(layout)?;
+            let addr_handle = self.inline.allocate(Self::OUTLINE_HANDLE_LAYOUT)?;
+            unsafe {
+                *self
+                    .inline
+                    .resolve_mut(addr_handle, Self::OUTLINE_HANDLE_LAYOUT)
+                    .as_mut_ptr()
+                    .cast() = addr;
+            }
+            Ok(addr_handle)
+        }
+    }
+
+    unsafe fn deallocate(&mut self, handle: Self::Handle, layout: Layout) {
+        if self.inline.fits(layout) {
+            self.inline.deallocate(handle, layout)
+        } else {
+            let addr = *self
+                .inline
+                .resolve_mut(handle, Self::OUTLINE_HANDLE_LAYOUT)
+                .as_ptr()
+                .cast();
+            self.inline.deallocate(handle, Self::OUTLINE_HANDLE_LAYOUT);
+            self.outline.deallocate(addr, layout);
+        }
+    }
+
+    unsafe fn resolve(&self, handle: Self::Handle, layout: Layout) -> &Memory {
+        if self.inline.fits(layout) {
+            self.inline.resolve(handle, layout)
+        } else {
+            let addr = *self
+                .inline
+                .resolve(handle, Self::OUTLINE_HANDLE_LAYOUT)
+                .as_ptr()
+                .cast();
+            self.outline.resolve(addr, layout)
+        }
+    }
+
+    unsafe fn resolve_mut(&mut self, handle: Self::Handle, layout: Layout) -> &mut Memory {
+        if self.inline.fits(layout) {
+            self.inline.resolve_mut(handle, layout)
+        } else {
+            let addr = *self
+                .inline
+                .resolve_mut(handle, Self::OUTLINE_HANDLE_LAYOUT)
+                .as_mut_ptr()
+                .cast();
+            self.outline.resolve_mut(addr, layout)
+        }
+    }
+
+    unsafe fn grow(
         &mut self,
-        meta: <T as core::ptr::Pointee>::Metadata,
-    ) -> Result<Self::Handle<T>, AllocError> {
-        if self.inline.fits::<T>(meta) {
-            self.inline.create::<T>(meta)?;
-            Ok(SmallStorageHandle { meta })
-        } else {
-            let (addr, _) = self.outline.create::<T>(meta)?.to_raw_parts();
-            let addr_handle = self.inline.create::<NonNull<()>>(())?;
-            *self.inline.resolve_mut(addr_handle).as_ptr() = addr;
-            Ok(SmallStorageHandle { meta })
+        handle: Self::Handle,
+        old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<Self::Handle, AllocError> {
+        match (self.inline.fits(old_layout), self.inline.fits(new_layout)) {
+            (true, true) => self.inline.grow(handle, old_layout, new_layout),
+            (false, true) => unreachable_unchecked(),
+            (false, false) => {
+                let addr = self
+                    .inline
+                    .resolve_mut(handle, Self::OUTLINE_HANDLE_LAYOUT)
+                    .as_mut_ptr()
+                    .cast();
+                *addr = self.outline.grow(*addr, old_layout, new_layout)?;
+                Ok(handle)
+            },
+            (true, false) => {
+                if !self.inline.fits(Self::OUTLINE_HANDLE_LAYOUT) {
+                    return Err(AllocError);
+                }
+
+                let addr = self.outline.allocate(new_layout)?;
+                let new_ptr = self.outline.resolve_mut(addr, new_layout);
+                let old_ptr = self.inline.resolve_mut(handle, old_layout);
+
+                copy_nonoverlapping(
+                    old_ptr.as_mut_ptr(),
+                    new_ptr.as_mut_ptr(),
+                    old_layout.size(),
+                );
+
+                self.inline.deallocate(handle, old_layout);
+                let addr_handle = self
+                    .inline
+                    .allocate(Self::OUTLINE_HANDLE_LAYOUT)
+                    .unwrap_unchecked();
+                *self
+                    .inline
+                    .resolve_mut(addr_handle, Self::OUTLINE_HANDLE_LAYOUT)
+                    .as_mut_ptr()
+                    .cast() = addr;
+                Ok(addr_handle)
+            },
         }
     }
 
-    unsafe fn destroy<T: ?Sized>(&mut self, handle: Self::Handle<T>) {
-        if self.inline.fits::<T>(handle.meta) {
-            self.inline
-                .destroy::<T>(InlineStorageHandle::new(handle.meta))
-        } else {
-            let addr_handle = InlineStorageHandle::<NonNull<()>>::new(());
-            let addr = *self.inline.resolve(addr_handle).as_ref();
-            self.inline.destroy(addr_handle);
-            let ptr = NonNull::<T>::from_raw_parts(addr, handle.meta);
-            self.outline.destroy(ptr);
+    unsafe fn shrink(
+        &mut self,
+        handle: Self::Handle,
+        old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<Self::Handle, AllocError> {
+        match (self.inline.fits(old_layout), self.inline.fits(new_layout)) {
+            (true, true) => self.inline.shrink(handle, old_layout, new_layout),
+            (true, false) => unreachable_unchecked(),
+            (false, false) => {
+                let addr = self
+                    .inline
+                    .resolve_mut(handle, Self::OUTLINE_HANDLE_LAYOUT)
+                    .as_mut_ptr()
+                    .cast();
+                *addr = self.outline.shrink(*addr, old_layout, new_layout)?;
+                Ok(handle)
+            },
+            (false, true) => {
+                todo!();
+            },
         }
-    }
-
-    unsafe fn resolve<T: ?Sized>(&self, handle: Self::Handle<T>) -> NonNull<T> {
-        if self.inline.fits::<T>(handle.meta) {
-            self.inline
-                .resolve::<T>(InlineStorageHandle::new(handle.meta))
-        } else {
-            let addr_handle = InlineStorageHandle::<NonNull<()>>::new(());
-            let addr = *self.inline.resolve(addr_handle).as_ref();
-            let ptr = NonNull::<T>::from_raw_parts(addr, handle.meta);
-            self.outline.resolve(ptr)
-        }
-    }
-
-    unsafe fn resolve_mut<T: ?Sized>(&mut self, handle: Self::Handle<T>) -> NonNull<T> {
-        if self.inline.fits::<T>(handle.meta) {
-            self.inline
-                .resolve_mut::<T>(InlineStorageHandle::new(handle.meta))
-        } else {
-            let addr_handle = InlineStorageHandle::<NonNull<()>>::new(());
-            let addr = *self.inline.resolve(addr_handle).as_ref();
-            let ptr = NonNull::<T>::from_raw_parts(addr, handle.meta);
-            self.outline.resolve_mut(ptr)
-        }
-    }
-}
-
-unsafe impl<T: ?Sized> Handle<T> for SmallStorageHandle<T> {
-    fn metadata(self) -> <T as Pointee>::Metadata {
-        self.meta
-    }
-}
-
-impl<T: ?Sized> SmallStorageHandle<T> {
-    pub fn new(meta: <T as Pointee>::Metadata) -> Self {
-        SmallStorageHandle { meta }
-    }
-}
-
-impl<T: ?Sized> Copy for SmallStorageHandle<T> {}
-impl<T: ?Sized> Clone for SmallStorageHandle<T> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<T: ?Sized> Eq for SmallStorageHandle<T> {}
-impl<T: ?Sized> PartialEq for SmallStorageHandle<T> {
-    fn eq(&self, rhs: &Self) -> bool {
-        self.meta == rhs.meta
-    }
-}
-
-impl<T: ?Sized> PartialOrd for SmallStorageHandle<T> {
-    fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
-        Some(self.cmp(rhs))
-    }
-}
-
-impl<T: ?Sized> Ord for SmallStorageHandle<T> {
-    fn cmp(&self, rhs: &Self) -> Ordering {
-        self.meta.cmp(&rhs.meta)
     }
 }
