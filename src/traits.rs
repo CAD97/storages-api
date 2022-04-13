@@ -1,19 +1,21 @@
 use core::{
     alloc::AllocError,
-    hash::Hash,
     mem::MaybeUninit,
     ptr::{copy_nonoverlapping, metadata, NonNull, Pointee},
 };
 
 /// Types which can be used as a storage handle.
 ///
-/// Generically, all you can do is give it to the storage. Some other operations
-/// that might be useful/necessary to have in the future:
+/// Generically, all you can do is extract the metadata or give it to the
+/// storage. Some other operations that might be useful/necessary to have in
+/// the future:
 ///
 /// - `cast`
 /// - `unsize`
 /// - `with_metadata_of`
-pub unsafe trait Handle<T: ?Sized>: Copy + Ord + Hash + Unpin {}
+pub unsafe trait Handle<T: ?Sized>: Copy {
+    fn metadata(self) -> <T as Pointee>::Metadata;
+}
 
 /// Types which can be used to store objects.
 ///
@@ -22,9 +24,9 @@ pub unsafe trait Handle<T: ?Sized>: Copy + Ord + Hash + Unpin {}
 ///
 /// (I've used `create`/`destroy` to clearly separate this from `Allocator`'s
 /// `allocate`/`deallocate` language, but naming is to be bikeshedded further.)
-pub unsafe trait Storage<T: ?Sized> {
+pub unsafe trait Storage {
     /// The handle which is used to access
-    type Handle: Handle<T>;
+    type Handle<T: ?Sized>: Handle<T>;
 
     /// Create an object handle in this storage.
     ///
@@ -45,8 +47,10 @@ pub unsafe trait Storage<T: ?Sized> {
     ///     - traits: vtable must always be valid (as a safety invariant)
     ///     - composites: size computation uses saturating/checked addition
     ///     - externs: any valid metadata must compute valid size/align or None
-    unsafe fn create(&mut self, meta: <T as Pointee>::Metadata)
-        -> Result<Self::Handle, AllocError>;
+    unsafe fn create<T: ?Sized>(
+        &mut self,
+        meta: <T as Pointee>::Metadata,
+    ) -> Result<Self::Handle<T>, AllocError>;
 
     /// Destroy an object handle in this storage.
     ///
@@ -56,15 +60,7 @@ pub unsafe trait Storage<T: ?Sized> {
     ///
     /// - The handle must have previously been created by this storage,
     ///   and must not have been destroyed.
-    unsafe fn destroy(&mut self, handle: Self::Handle);
-
-    /// Resolve the metadata of a handle in this storage.
-    ///
-    /// # Safety
-    ///
-    /// - The handle must have previously been created by this storage,
-    ///   and must not have been destroyed or invalidated.
-    unsafe fn resolve_metadata(&self, handle: Self::Handle) -> <T as Pointee>::Metadata;
+    unsafe fn destroy<T: ?Sized>(&mut self, handle: Self::Handle<T>);
 
     /// Resolve an object handle in this storage to a pointer.
     ///
@@ -75,7 +71,7 @@ pub unsafe trait Storage<T: ?Sized> {
     ///
     /// - The handle must have previously been created by this storage,
     ///   and must not have been destroyed or invalidated.
-    unsafe fn resolve(&self, handle: Self::Handle) -> NonNull<T>;
+    unsafe fn resolve<T: ?Sized>(&self, handle: Self::Handle<T>) -> NonNull<T>;
 
     /// Resolve an object handle in this storage to a pointer.
     ///
@@ -87,7 +83,7 @@ pub unsafe trait Storage<T: ?Sized> {
     ///
     /// - The handle must have previously been created by this storage,
     ///   and must not have been destroyed or invalidated.
-    unsafe fn resolve_mut(&mut self, handle: Self::Handle) -> NonNull<T>;
+    unsafe fn resolve_mut<T: ?Sized>(&mut self, handle: Self::Handle<T>) -> NonNull<T>;
 }
 
 /// A storage that creates pinned handles.
@@ -99,7 +95,7 @@ pub unsafe trait Storage<T: ?Sized> {
 /// [`destroy`]: Storage::destroy
 /// [`resolve`]: Storage::resolve
 /// [`resolve_mut`]: Storage::resolve_mut
-pub unsafe trait PinningStorage<T: ?Sized>: Storage<T> {}
+pub unsafe trait PinningStorage: Storage {}
 
 /// A storage that can create multiple handles.
 ///
@@ -131,18 +127,18 @@ pub unsafe trait PinningStorage<T: ?Sized>: Storage<T> {}
 /// [`destroy`]: Storage::destroy
 /// [`resolve`]: Storage::resolve
 /// [`resolve_mut`]: Storage::resolve_mut
-pub unsafe trait MultipleStorage<T: ?Sized>: Storage<T> {}
+pub unsafe trait MultipleStorage: Storage {}
 
 /// A storage that serves as a uniqueness barrier.
 ///
 /// Pointers returned from [`resolve`][Storage::resolve] are valid for writes.
-pub unsafe trait SharedMutabilityStorage<T: ?Sized>: Storage<T> {}
+pub unsafe trait SharedMutabilityStorage: Storage {}
 
 /// A storage that can reallocate to adjust the length of slice objects.
 ///
 /// Automatically provided for any [`MultipleStorage`] by allocating a new
 /// object and copying the old allocation into the new one.
-pub unsafe trait SliceStorage<T>: Storage<[T]> {
+pub unsafe trait SliceStorage: Storage {
     /// Grow a slice handle to a larger size.
     ///
     /// If this function succeeds, then the old handle is invalidated and the
@@ -159,11 +155,11 @@ pub unsafe trait SliceStorage<T>: Storage<[T]> {
     /// - The handle must have previously been created by this storage,
     ///   and must not have been destroyed or invalidated.
     /// - `new_len` must be longer than the existing slice length.
-    unsafe fn grow(
+    unsafe fn grow<T>(
         &mut self,
-        handle: Self::Handle,
+        handle: Self::Handle<[T]>,
         new_len: usize,
-    ) -> Result<Self::Handle, AllocError>;
+    ) -> Result<Self::Handle<[T]>, AllocError>;
 
     /// Shrink a slice handle to a smaller size.
     ///
@@ -178,20 +174,20 @@ pub unsafe trait SliceStorage<T>: Storage<[T]> {
     /// - The handle must have previously been created by this storage,
     ///   and must not have been destroyed or invalidated.
     /// - `new_len` must be shorter than the existing slice length.
-    unsafe fn shrink(
+    unsafe fn shrink<T>(
         &mut self,
-        handle: Self::Handle,
+        handle: Self::Handle<[T]>,
         new_len: usize,
-    ) -> Result<Self::Handle, AllocError>;
+    ) -> Result<Self::Handle<[T]>, AllocError>;
 }
 
-unsafe impl<T, S: MultipleStorage<[T]>> SliceStorage<T> for S {
-    default unsafe fn grow(
+default unsafe impl<S: MultipleStorage> SliceStorage for S {
+    default unsafe fn grow<T>(
         &mut self,
-        old_handle: Self::Handle,
+        old_handle: Self::Handle<[T]>,
         new_len: usize,
-    ) -> Result<Self::Handle, AllocError> {
-        let new_handle: Self::Handle = self.create(new_len)?;
+    ) -> Result<Self::Handle<[T]>, AllocError> {
+        let new_handle: Self::Handle<[T]> = self.create(new_len)?;
         let new_ptr: NonNull<[T]> = self.resolve_mut(new_handle);
 
         let old_ptr: NonNull<[T]> = self.resolve_mut(old_handle);
@@ -209,12 +205,12 @@ unsafe impl<T, S: MultipleStorage<[T]>> SliceStorage<T> for S {
         Ok(new_handle)
     }
 
-    default unsafe fn shrink(
+    default unsafe fn shrink<T>(
         &mut self,
-        old_handle: Self::Handle,
+        old_handle: Self::Handle<[T]>,
         new_len: usize,
-    ) -> Result<Self::Handle, AllocError> {
-        let new_handle: Self::Handle = self.create(new_len)?;
+    ) -> Result<Self::Handle<[T]>, AllocError> {
+        let new_handle: Self::Handle<[T]> = self.create(new_len)?;
         let new_ptr: NonNull<[T]> = self.resolve_mut(new_handle);
 
         let old_ptr: NonNull<[T]> = self.resolve_mut(old_handle);
@@ -233,53 +229,8 @@ unsafe impl<T, S: MultipleStorage<[T]>> SliceStorage<T> for S {
     }
 }
 
-unsafe impl<T: ?Sized> Handle<T> for NonNull<T> {}
-
-unsafe impl<T: ?Sized, S: Storage<T>> Storage<T> for &'_ mut S {
-    type Handle = S::Handle;
-
-    unsafe fn create(
-        &mut self,
-        meta: <T as Pointee>::Metadata,
-    ) -> Result<Self::Handle, AllocError> {
-        (**self).create(meta)
-    }
-
-    unsafe fn destroy(&mut self, handle: Self::Handle) {
-        (**self).destroy(handle)
-    }
-
-    unsafe fn resolve_metadata(&self, handle: Self::Handle) -> <T as Pointee>::Metadata {
-        (**self).resolve_metadata(handle)
-    }
-
-    unsafe fn resolve(&self, handle: Self::Handle) -> NonNull<T> {
-        (**self).resolve(handle)
-    }
-
-    unsafe fn resolve_mut(&mut self, handle: Self::Handle) -> NonNull<T> {
-        (**self).resolve_mut(handle)
+unsafe impl<T: ?Sized> Handle<T> for NonNull<T> {
+    fn metadata(self) -> <T as Pointee>::Metadata {
+        metadata(self.as_ptr())
     }
 }
-
-unsafe impl<T: ?Sized, S: SharedMutabilityStorage<T>> SharedMutabilityStorage<T> for &'_ mut S {}
-unsafe impl<T: ?Sized, S: MultipleStorage<T>> MultipleStorage<T> for &'_ mut S {}
-unsafe impl<T: ?Sized, S: PinningStorage<T>> PinningStorage<T> for &'_ mut S {}
-
-// unsafe impl<T, S: SliceStorage<T>> SliceStorage<T> for &'_ mut S {
-//     unsafe fn grow(
-//         &mut self,
-//         handle: Self::Handle,
-//         new_len: usize,
-//     ) -> Result<Self::Handle, AllocError> {
-//         (**self).grow(handle, new_len)
-//     }
-
-//     unsafe fn shrink(
-//         &mut self,
-//         handle: Self::Handle,
-//         new_len: usize,
-//     ) -> Result<Self::Handle, AllocError> {
-//         (**self).shrink(handle, new_len)
-//     }
-// }

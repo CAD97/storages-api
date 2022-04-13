@@ -6,7 +6,6 @@ use {
     core::{
         alloc::{AllocError, Layout},
         cmp::Ordering,
-        hash::{Hash, Hasher},
         mem::MaybeUninit,
         ptr::{NonNull, Pointee},
     },
@@ -41,13 +40,13 @@ impl<DataStore> InlineStorage<DataStore> {
     }
 }
 
-unsafe impl<DataStore, T: ?Sized> Storage<T> for InlineStorage<DataStore> {
-    type Handle = InlineStorageHandle<T>;
+unsafe impl<DataStore> Storage for InlineStorage<DataStore> {
+    type Handle<T: ?Sized> = InlineStorageHandle<T>;
 
-    unsafe fn create(
+    unsafe fn create<T: ?Sized>(
         &mut self,
         meta: <T as core::ptr::Pointee>::Metadata,
-    ) -> Result<Self::Handle, AllocError> {
+    ) -> Result<Self::Handle<T>, AllocError> {
         let available_layout = Layout::new::<DataStore>();
         let needed_layout = layout_for_meta::<T>(meta).ok_or(AllocError)?;
         if layout_fits_in(needed_layout, available_layout) {
@@ -57,24 +56,24 @@ unsafe impl<DataStore, T: ?Sized> Storage<T> for InlineStorage<DataStore> {
         }
     }
 
-    unsafe fn destroy(&mut self, _handle: Self::Handle) {}
+    unsafe fn destroy<T: ?Sized>(&mut self, _handle: Self::Handle<T>) {}
 
-    unsafe fn resolve_metadata(&self, handle: Self::Handle) -> <T as Pointee>::Metadata {
-        handle.meta
-    }
-
-    unsafe fn resolve(&self, handle: Self::Handle) -> NonNull<T> {
+    unsafe fn resolve<T: ?Sized>(&self, handle: Self::Handle<T>) -> NonNull<T> {
         let ptr = NonNull::new_unchecked(self.data.as_ptr() as *mut ());
         NonNull::from_raw_parts(ptr.cast(), handle.meta)
     }
 
-    unsafe fn resolve_mut(&mut self, handle: Self::Handle) -> NonNull<T> {
+    unsafe fn resolve_mut<T: ?Sized>(&mut self, handle: Self::Handle<T>) -> NonNull<T> {
         let ptr = NonNull::new_unchecked(self.data.as_mut_ptr() as *mut ());
         NonNull::from_raw_parts(ptr, handle.meta)
     }
 }
 
-unsafe impl<T: ?Sized> Handle<T> for InlineStorageHandle<T> {}
+unsafe impl<T: ?Sized> Handle<T> for InlineStorageHandle<T> {
+    fn metadata(self) -> <T as Pointee>::Metadata {
+        self.meta
+    }
+}
 
 impl<T: ?Sized> InlineStorageHandle<T> {
     pub fn new(meta: <T as Pointee>::Metadata) -> Self {
@@ -105,11 +104,5 @@ impl<T: ?Sized> PartialOrd for InlineStorageHandle<T> {
 impl<T: ?Sized> Ord for InlineStorageHandle<T> {
     fn cmp(&self, rhs: &Self) -> Ordering {
         self.meta.cmp(&rhs.meta)
-    }
-}
-
-impl<T: ?Sized> Hash for InlineStorageHandle<T> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.meta.hash(state)
     }
 }

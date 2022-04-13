@@ -22,6 +22,7 @@
 #![feature(
     allocator_api,
     dropck_eyepatch,
+    generic_associated_types,
     layout_for_ptr,
     specialization,
     ptr_metadata
@@ -36,11 +37,9 @@
 
 mod alloc;
 mod inline;
-mod one_use_arena;
 mod polyfill;
 mod raw_box;
 mod raw_vec;
-mod referenced;
 mod small;
 mod traits;
 
@@ -48,10 +47,8 @@ mod traits;
 pub use crate::{
     alloc::AllocStorage,
     inline::{InlineStorage, InlineStorageHandle},
-    one_use_arena::{OneUseArenaStorage, OneUseArenaStorageHandle},
     raw_box::RawBox,
     raw_vec::RawVec,
-    referenced::{RefStorage, RefStorageHandle},
     small::{SmallStorage, SmallStorageHandle},
     traits::{
         Handle, MultipleStorage, PinningStorage, SharedMutabilityStorage, SliceStorage, Storage,

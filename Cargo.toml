@@ -7,6 +7,3 @@ publish = false
 [features]
 
 [dependencies]
-
-[dev-dependencies]
-cool_asserts = "1.1.1"

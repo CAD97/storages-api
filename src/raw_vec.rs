@@ -1,4 +1,7 @@
-use {crate::SliceStorage, core::alloc::AllocError};
+use {
+    crate::{Handle, SliceStorage},
+    core::alloc::AllocError,
+};
 
 /// A raw vec around some slice storage. Bundles the storage and its handle.
 ///
@@ -6,12 +9,12 @@ use {crate::SliceStorage, core::alloc::AllocError};
 /// raw vec handles amortized growth; this raw vec just does exactly as asked.
 ///
 /// [alloc's `RawVec`]: https://github.com/rust-lang/rust/blob/master/library/alloc/src/raw_vec.rs
-pub struct RawVec<T, S: SliceStorage<T>> {
-    handle: S::Handle,
+pub struct RawVec<T, S: SliceStorage> {
+    handle: S::Handle<[T]>,
     storage: S,
 }
 
-impl<T, S: SliceStorage<T>> RawVec<T, S> {
+impl<T, S: SliceStorage> RawVec<T, S> {
     /// Create a new empty growable slice in the given storage.
     pub fn new(mut storage: S) -> Result<Self, S> {
         match unsafe { storage.create(0) } {
@@ -36,7 +39,7 @@ impl<T, S: SliceStorage<T>> RawVec<T, S> {
 
     /// Get the length of the slice.
     pub fn len(&self) -> usize {
-        unsafe { self.storage.resolve_metadata(self.handle) }
+        self.handle.metadata()
     }
 
     /// Grow the length of the slice to `new_len`. Does not change the length
@@ -62,7 +65,7 @@ impl<T, S: SliceStorage<T>> RawVec<T, S> {
     }
 }
 
-unsafe impl<#[may_dangle] T, S: SliceStorage<T>> Drop for RawVec<T, S> {
+unsafe impl<#[may_dangle] T, S: SliceStorage> Drop for RawVec<T, S> {
     fn drop(&mut self) {
         unsafe { self.storage.destroy(self.handle) }
     }
