@@ -16,6 +16,7 @@
 //! - [`InlineStorage`]: single storage located in the storage's bytes
 //! - [`AllocStorage`]: full-featured storage via allocation
 //! - [`SmallStorage`]: inline storage with a fallback to allocation
+//! - [`BorrowedStorage`]: single storage located in someone else's memory
 
 #![no_std]
 #![feature(
@@ -39,6 +40,7 @@
 )]
 
 mod alloc;
+mod borrowed;
 mod inline;
 mod polyfill;
 mod raw_box;
@@ -49,6 +51,7 @@ mod traits;
 #[doc(inline)]
 pub use crate::{
     alloc::AllocStorage,
+    borrowed::BorrowedStorage,
     inline::InlineStorage,
     raw_box::RawBox,
     raw_vec::RawVec,
