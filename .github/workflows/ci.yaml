@@ -7,38 +7,15 @@ on:
     branches:
       - main
 
-env:
-  CARGO_INCREMENTAL: 0
-  CARGO_NET_RETRY: 10
-  RUSTUP_MAX_RETRIES: 10
-  RUST_BACKTRACE: short
-  MIRIFLAGS: -Zmiri-strict-provenance -Zmiri-symbolic-alignment-check
-
 jobs:
-  miri:
-    name: Run tests
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Install nightly toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          profile: minimal
-          components: miri
-          override: true
-
-      - name: Setup miri
-        uses: actions-rs/cargo@v1
-        with:
-          command: miri
-          args: setup
-
-      - name: Run tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: miri
-          args: test
+  miri_with_leaks:
+    name: Miri checks
+    uses: ./.github/workflows/run_miri.yaml
+    with:
+      MIRIFLAGS: -Zmiri-strict-provenance -Zmiri-symbolic-alignment-check
+  miri_without_leaks:
+    name: Miri checks, ignoring leaks
+    uses: ./.github/workflows/run_miri.yaml
+    with:
+      MIRIFLAGS: -Zmiri-strict-provenance -Zmiri-symbolic-alignment-check -Zmiri-ignore-leaks
+      RUSTFLAGS: --cfg miri_ignore_leaks

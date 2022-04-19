@@ -13,7 +13,7 @@ pub struct AllocStorage<A: Allocator> {
 }
 
 impl<A: Allocator> AllocStorage<A> {
-    pub fn new(alloc: A) -> Self {
+    pub const fn new(alloc: A) -> Self {
         Self { alloc }
     }
 }

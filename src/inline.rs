@@ -18,7 +18,7 @@ pub struct InlineStorage<DataStore> {
 }
 
 impl<DataStore> InlineStorage<DataStore> {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             data: MaybeUninit::uninit(),
         }
