@@ -14,10 +14,8 @@ pub type Memory = [MaybeUninit<u8>];
 pub unsafe trait Storage {
     /// The handle which is used to access the stored memory.
     ///
-    /// (This should probably also include `Send + Sync`, as only the Send/Sync
-    /// of the Storage matters, not the handles themselves, but the simplicity
-    /// of being able to use `ptr::NonNull<()>` as a handle is appealing.)
-    type Handle: Copy + Ord + Hash + Unpin;
+    /// (Removing `Send + Sync` is enticing, as it allows using `ptr::NonNull`.)
+    type Handle: Copy + Ord + Hash + Unpin + Send + Sync;
 
     /// Allocate memory handle in this storage.
     ///

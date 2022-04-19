@@ -50,7 +50,7 @@ mod traits;
 
 #[doc(inline)]
 pub use crate::{
-    alloc::AllocStorage,
+    alloc::{AllocHandle, AllocStorage},
     borrowed::BorrowedStorage,
     inline::InlineStorage,
     raw_box::RawBox,

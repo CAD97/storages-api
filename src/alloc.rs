@@ -19,23 +19,23 @@ impl<A: Allocator> AllocStorage<A> {
 }
 
 unsafe impl<A: Allocator> Storage for AllocStorage<A> {
-    type Handle = NonNull<()>;
+    type Handle = AllocHandle;
 
     fn allocate(&mut self, layout: Layout) -> Result<Self::Handle, AllocError> {
         let (ptr, _meta) = self.alloc.allocate(layout)?.to_raw_parts();
-        Ok(ptr)
+        Ok(AllocHandle::new(ptr))
     }
 
     unsafe fn deallocate(&mut self, handle: Self::Handle, layout: Layout) {
-        self.alloc.deallocate(handle.cast(), layout)
+        self.alloc.deallocate(handle.pointer.cast(), layout)
     }
 
     unsafe fn resolve(&self, handle: Self::Handle, layout: Layout) -> &Memory {
-        NonNull::from_raw_parts(handle, layout.size()).as_ref()
+        NonNull::from_raw_parts(handle.pointer, layout.size()).as_ref()
     }
 
     unsafe fn resolve_mut(&mut self, handle: Self::Handle, layout: Layout) -> &mut Memory {
-        NonNull::from_raw_parts(handle, layout.size()).as_mut()
+        NonNull::from_raw_parts(handle.pointer, layout.size()).as_mut()
     }
 
     unsafe fn grow(
@@ -46,9 +46,9 @@ unsafe impl<A: Allocator> Storage for AllocStorage<A> {
     ) -> Result<Self::Handle, AllocError> {
         let (ptr, _meta) = self
             .alloc
-            .grow(handle.cast(), old_layout, new_layout)?
+            .grow(handle.pointer.cast(), old_layout, new_layout)?
             .to_raw_parts();
-        Ok(ptr)
+        Ok(AllocHandle::new(ptr))
     }
 
     unsafe fn shrink(
@@ -59,9 +59,9 @@ unsafe impl<A: Allocator> Storage for AllocStorage<A> {
     ) -> Result<Self::Handle, AllocError> {
         let (ptr, _meta) = self
             .alloc
-            .shrink(handle.cast(), old_layout, new_layout)?
+            .shrink(handle.pointer.cast(), old_layout, new_layout)?
             .to_raw_parts();
-        Ok(ptr)
+        Ok(AllocHandle::new(ptr))
     }
 }
 
@@ -80,8 +80,24 @@ unsafe impl<A: Allocator> MultipleStorage for AllocStorage<A> {
 
 unsafe impl<A: Allocator> SharedMutabilityStorage for AllocStorage<A> {
     unsafe fn resolve_raw(&self, handle: Self::Handle, layout: Layout) -> &mut Memory {
-        NonNull::from_raw_parts(handle, layout.size()).as_mut()
+        NonNull::from_raw_parts(handle.pointer, layout.size()).as_mut()
     }
 }
 
 unsafe impl<A: Allocator> PinningStorage for AllocStorage<A> {}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct AllocHandle {
+    pointer: NonNull<()>,
+}
+
+unsafe impl Send for AllocHandle {}
+unsafe impl Sync for AllocHandle {}
+
+impl AllocHandle {
+    const fn new<T: ?Sized>(pointer: NonNull<T>) -> Self {
+        Self {
+            pointer: pointer.cast(),
+        }
+    }
+}
