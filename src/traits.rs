@@ -1,236 +1,225 @@
 use core::{
-    alloc::AllocError,
+    alloc::{AllocError, Layout},
+    hash::Hash,
     mem::MaybeUninit,
-    ptr::{copy_nonoverlapping, metadata, NonNull, Pointee},
+    ptr::copy_nonoverlapping,
 };
 
-/// Types which can be used as a storage handle.
-///
-/// Generically, all you can do is extract the metadata or give it to the
-/// storage. Some other operations that might be useful/necessary to have in
-/// the future:
-///
-/// - `cast`
-/// - `unsize`
-/// - `with_metadata_of`
-pub unsafe trait Handle<T: ?Sized>: Copy {
-    fn metadata(self) -> <T as Pointee>::Metadata;
-}
+pub type Memory = [MaybeUninit<u8>];
 
-/// Types which can be used to store objects.
+/// Types which can be used to manage memory handles.
 ///
 /// The behavior of this trait is refined by traits [`PinningStorage`],
 /// [`MultipleStorage`], and [`SharedMutabilityStorage`].
-///
-/// (I've used `create`/`destroy` to clearly separate this from `Allocator`'s
-/// `allocate`/`deallocate` language, but naming is to be bikeshedded further.)
 pub unsafe trait Storage {
-    /// The handle which is used to access
-    type Handle<T: ?Sized>: Handle<T>;
+    /// The handle which is used to access the stored memory.
+    ///
+    /// (This should probably also include `Send + Sync`, as only the Send/Sync
+    /// of the Storage matters, not the handles themselves, but the simplicity
+    /// of being able to use `ptr::NonNull<()>` as a handle is appealing.)
+    type Handle: Copy + Ord + Hash + Unpin;
 
-    /// Create an object handle in this storage.
+    /// Allocate memory handle in this storage.
     ///
-    /// The handled object is not initialized.
+    /// The handled memory is not initialized. Any existing handles are
+    /// invalidated.
     ///
-    /// (Do we want a `create_zeroed`?)
+    /// (Do we want an `allocate_zeroed`?)
+    fn allocate(&mut self, layout: Layout) -> Result<Self::Handle, AllocError>;
+
+    /// Deallocate an object handle in this storage.
+    ///
+    /// The handled memory is not required to be valid in any way. The handle is
+    /// invalidated.
     ///
     /// # Safety
     ///
-    /// - Any previously created handles have been destroyed.
-    ///   - (This can maybe be loosened to it invalidating existing handles?)
-    /// - The metadata must describe a layout valid for a rust object.
-    ///   - This exists due to the safety requirements of `size_of_val_raw`
-    ///     and `align_of_val_raw`. I think we need a way to go compute layout
-    ///     from metadata safely, with a check that it produces a valid layout.
-    ///   - On each unsized kind, this would imply:
-    ///     - slices: size computation uses saturating/checked multiplication
-    ///     - traits: vtable must always be valid (as a safety invariant)
-    ///     - composites: size computation uses saturating/checked addition
-    ///     - externs: any valid metadata must compute valid size/align or None
-    unsafe fn create<T: ?Sized>(
-        &mut self,
-        meta: <T as Pointee>::Metadata,
-    ) -> Result<Self::Handle<T>, AllocError>;
+    /// - The handle must have been created by this storage, and must not have
+    ///   been invalidated.
+    /// - The layout must be the same as used to allocate the handle.
+    unsafe fn deallocate(&mut self, handle: Self::Handle, layout: Layout);
 
-    /// Destroy an object handle in this storage.
-    ///
-    /// The handled object is not modified nor required to be valid in any way.
+    /// Resolve a memory handle in this storage to a reference.
     ///
     /// # Safety
     ///
-    /// - The handle must have previously been created by this storage,
-    ///   and must not have been destroyed.
-    unsafe fn destroy<T: ?Sized>(&mut self, handle: Self::Handle<T>);
+    /// - The handle must have been created by this storage, and must not have
+    ///   been invalidated.
+    /// - The layout must be the same as used to allocate the handle.
+    unsafe fn resolve(&self, handle: Self::Handle, layout: Layout) -> &Memory;
 
-    /// Resolve an object handle in this storage to a pointer.
-    ///
-    /// The returned pointer is valid *for reads only* and is invalidated
-    /// when the storage is moved or used mutably.
+    /// Resolve a memory handle in this storage to a mutable reference.
     ///
     /// # Safety
     ///
-    /// - The handle must have previously been created by this storage,
-    ///   and must not have been destroyed or invalidated.
-    unsafe fn resolve<T: ?Sized>(&self, handle: Self::Handle<T>) -> NonNull<T>;
+    /// - The handle must have been created by this storage, and must not have
+    ///   been invalidated.
+    /// - The layout must be the same as used to allocate the handle.
+    unsafe fn resolve_mut(&mut self, handle: Self::Handle, layout: Layout) -> &mut Memory;
 
-    /// Resolve an object handle in this storage to a pointer.
-    ///
-    /// The returned pointer is valid for both reads and writes and is
-    /// invalidated when the storage is moved or used mutably. (This includes
-    /// but is not limited to further calls to `resolve_mut`.)
-    ///
-    /// # Safety
-    ///
-    /// - The handle must have previously been created by this storage,
-    ///   and must not have been destroyed or invalidated.
-    unsafe fn resolve_mut<T: ?Sized>(&mut self, handle: Self::Handle<T>) -> NonNull<T>;
-}
-
-/// A storage that creates pinned handles.
-///
-/// Any objects created inside of this storage will not be moved nor their
-/// backing memory reused until [`destroy`] is called on their handle.
-/// (Equivalently: [`resolve`] and [`resolve_mut`] return `Pin<NonNull<T>>`).
-///
-/// [`destroy`]: Storage::destroy
-/// [`resolve`]: Storage::resolve
-/// [`resolve_mut`]: Storage::resolve_mut
-pub unsafe trait PinningStorage: Storage {}
-
-/// A storage that can create multiple handles.
-///
-/// The restriction that [`create`] can not be called until the previously
-/// created handle has been [`destroy`]ed is removed. You can `create` multiple
-/// handles that are all valid at the same time. This does not change the
-/// requirements of [`resolve`] or [`resolve_mut`]; only one pointer returned
-/// from `resolve_mut` is valid at a time.
-///
-/// (In theory, we're missing the ability to `create` multiple handles to a
-/// `!SharedMutabilityStorage` and access their objects mutably simultaneously.
-/// This is possible to do soundly (for the homogeneously-typed case, store a
-/// slice/array and `split_at_mut` it), but seems rare enough in practice that
-/// the complexity to support it doesn't seem warranted? Such a function would
-/// live on this trait and could look like the following:
-///
-/// ```rust,compile_fail
-/// unsafe fn resolve_many_mut<T: ?Sized, N: usize>(
-///     &mut self,
-///     handles: [Self::Handle<T>; N],
-/// ) -> [NonNull<T>; N];
-/// ```
-///
-/// The reason for this restriction is that reborrowing `&mut Storage` to call
-/// `resolve_mut` invalidates any references/pointers derived from the previous
-/// reborrow of `&mut Storage`. This is fundamental to `&mut` being `noalias`.)
-///
-/// [`create`]: Storage::create
-/// [`destroy`]: Storage::destroy
-/// [`resolve`]: Storage::resolve
-/// [`resolve_mut`]: Storage::resolve_mut
-pub unsafe trait MultipleStorage: Storage {}
-
-/// A storage that serves as a uniqueness barrier.
-///
-/// Pointers returned from [`resolve`][Storage::resolve] are valid for writes.
-pub unsafe trait SharedMutabilityStorage: Storage {}
-
-/// A storage that can reallocate to adjust the length of slice objects.
-///
-/// Automatically provided for any [`MultipleStorage`] by allocating a new
-/// object and copying the old allocation into the new one.
-pub unsafe trait SliceStorage: Storage {
-    /// Grow a slice handle to a larger size.
+    /// Grow a memory handle to a larger size.
     ///
     /// If this function succeeds, then the old handle is invalidated and the
-    /// handled object has been moved into the new handle. The new length is
+    /// handled memory has been moved into the new handle. The new length is
     /// uninitialized.
     ///
     /// (Do we want a `grow_zeroed`?)
     ///
     /// If this function fails, then the old handle is not invalidated and
-    /// still contains the object.
+    /// still contains the memory in its state before calling this function.
     ///
     /// # Safety
     ///
-    /// - The handle must have previously been created by this storage,
-    ///   and must not have been destroyed or invalidated.
-    /// - `new_len` must be longer than the existing slice length.
-    unsafe fn grow<T>(
+    /// - The handle must have been created by this storage, and must not have
+    ///   been invalidated.
+    /// - `old_layout` must be the same as used to allocate the handle.
+    /// - `new_layout.size() >= old_layout.size()`.
+    ///
+    /// Note that `new_layout.align()` is not required to be the same as
+    /// `old_layout.align()`
+    unsafe fn grow(
         &mut self,
-        handle: Self::Handle<[T]>,
-        new_len: usize,
-    ) -> Result<Self::Handle<[T]>, AllocError>;
+        handle: Self::Handle,
+        old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<Self::Handle, AllocError>;
 
-    /// Shrink a slice handle to a smaller size.
+    /// Shrink a memory handle to a smaller size.
     ///
     /// If this function succeeds, then the old handle is invalidated and the
-    /// prefix of the handled object has been moved into the new handle.
+    /// prefix of the handled memory has been moved into the new handle.
     ///
     /// If this function fails, then the old handle is not invalidated and
-    /// still contains the object.
+    /// still contains the memory in its state before calling this function.
     ///
     /// # Safety
     ///
-    /// - The handle must have previously been created by this storage,
-    ///   and must not have been destroyed or invalidated.
-    /// - `new_len` must be shorter than the existing slice length.
-    unsafe fn shrink<T>(
+    /// - The handle must have been created by this storage, and must not have
+    ///   been invalidated.
+    /// - `old_layout` must be the same as used to allocate the handle.
+    /// - `new_layout.size() <= old_layout.size()`.
+    ///
+    /// Note that `new_layout.align()` is not required to be the same as
+    /// `old_layout.align()`
+    unsafe fn shrink(
         &mut self,
-        handle: Self::Handle<[T]>,
-        new_len: usize,
-    ) -> Result<Self::Handle<[T]>, AllocError>;
+        handle: Self::Handle,
+        old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<Self::Handle, AllocError>;
 }
 
-default unsafe impl<S: MultipleStorage> SliceStorage for S {
-    default unsafe fn grow<T>(
+/// A storage that allocates pinned memory handles.
+///
+/// Any memory allocated inside of this storage will not be moved nor reused
+/// until [`deallocate`] is called on its handle. As such, an object in the
+/// memory can be safely pinned.
+///
+/// [`deallocate`]: Storage::deallocate
+pub unsafe trait PinningStorage: Storage {}
+
+/// A storage that can manage multiple memory handles.
+///
+/// [`allocate`] no longer invalidates existing handles. You can `allocate`
+/// multiple handles that are all valid at the same time. This does not change
+/// the requirements of [`resolve`] or [`resolve_mut`]; only one pointer
+/// returned from `resolve_mut` is valid at a time.
+///
+/// In addition, [`grow`] and [`shrink`] are implemented at least at least as
+/// well as creating a new handle and copying over the old contents. (This is
+/// provided by default impl.)
+///
+/// [`allocate`]: Storage::allocate
+/// [`resolve`]: Storage::resolve
+/// [`resolve_mut`]: Storage::resolve_mut
+/// [`grow`]: Storage::grow
+/// [`shrink`]: Storage::shrink
+pub unsafe trait MultipleStorage: Storage {
+    /// Resolve memory handles in this storage to mutable references.
+    ///
+    /// # Safety
+    ///
+    /// - The handles must have been created by this storage, and must not have
+    ///   been invalidated.
+    /// - The layout must be the same as used to allocate the handle.
+    /// - The same handle must not be resolved twice in a single call.
+    unsafe fn resolve_many_mut<const N: usize>(
         &mut self,
-        old_handle: Self::Handle<[T]>,
-        new_len: usize,
-    ) -> Result<Self::Handle<[T]>, AllocError> {
-        let new_handle: Self::Handle<[T]> = self.create(new_len)?;
-        let new_ptr: NonNull<[T]> = self.resolve_mut(new_handle);
+        handles: [(Self::Handle, Layout); N],
+    ) -> [&mut Memory; N];
+}
 
-        let old_ptr: NonNull<[T]> = self.resolve_mut(old_handle);
-        let old_len: usize = metadata(old_ptr.as_ptr());
+/// A storage that serves as a uniqueness barrier.
+///
+/// Notably, this means that this storage can go `&Storage -> &mut Memory`, and
+/// thus it is possible to mutate the stored memory behind a shared storage
+/// reference, and to mutably resolve multiple handles separately without
+/// invalidating previously resolved handles.
+///
+/// [`resolve`]: Storage::resolve
+/// [`resolve_mut`]: Storage::resolve_mut
+pub unsafe trait SharedMutabilityStorage: Storage {
+    /// Resolve a memory handle in this storage to a mutable reference.
+    ///
+    /// # Safety
+    ///
+    /// - The handle must have been created by this storage, and must not have
+    ///   been invalidated.
+    /// - The layout must be the same as used to allocate the handle.
+    unsafe fn resolve_raw(&self, handle: Self::Handle, layout: Layout) -> &mut Memory;
+}
 
-        debug_assert!(new_len >= old_len, "invalid arguments to Storage::grow");
-
-        copy_nonoverlapping(
-            old_ptr.as_ptr().cast::<T>(),
-            new_ptr.as_ptr().cast::<T>(),
-            old_len,
+default unsafe impl<S> Storage for S
+where
+    S: MultipleStorage,
+{
+    default unsafe fn grow(
+        &mut self,
+        old_handle: Self::Handle,
+        old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<Self::Handle, AllocError> {
+        debug_assert!(
+            new_layout.size() >= old_layout.size(),
+            "invalid arguments to Storage::grow",
         );
 
-        self.destroy(old_handle);
+        let new_handle: Self::Handle = self.allocate(new_layout)?;
+        let [new_ptr, old_ptr] =
+            self.resolve_many_mut([(new_handle, new_layout), (old_handle, old_layout)]);
+
+        copy_nonoverlapping(
+            old_ptr.as_mut_ptr(),
+            new_ptr.as_mut_ptr(),
+            old_layout.size(),
+        );
+
+        self.deallocate(old_handle, old_layout);
         Ok(new_handle)
     }
 
-    default unsafe fn shrink<T>(
+    default unsafe fn shrink(
         &mut self,
-        old_handle: Self::Handle<[T]>,
-        new_len: usize,
-    ) -> Result<Self::Handle<[T]>, AllocError> {
-        let new_handle: Self::Handle<[T]> = self.create(new_len)?;
-        let new_ptr: NonNull<[T]> = self.resolve_mut(new_handle);
-
-        let old_ptr: NonNull<[T]> = self.resolve_mut(old_handle);
-        let old_len: usize = metadata(old_ptr.as_ptr());
-
-        debug_assert!(new_len <= old_len, "invalid arguments to Storage::grow");
-
-        copy_nonoverlapping(
-            old_ptr.as_ptr().cast::<MaybeUninit<T>>(),
-            new_ptr.as_ptr().cast::<MaybeUninit<T>>(),
-            new_len,
+        old_handle: Self::Handle,
+        old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<Self::Handle, AllocError> {
+        debug_assert!(
+            new_layout.size() <= old_layout.size(),
+            "invalid arguments to Storage::shrink",
         );
 
-        self.destroy(old_handle);
-        Ok(new_handle)
-    }
-}
+        let new_handle: Self::Handle = self.allocate(new_layout)?;
+        let [new_ptr, old_ptr] =
+            self.resolve_many_mut([(new_handle, new_layout), (old_handle, old_layout)]);
 
-unsafe impl<T: ?Sized> Handle<T> for NonNull<T> {
-    fn metadata(self) -> <T as Pointee>::Metadata {
-        metadata(self.as_ptr())
+        copy_nonoverlapping(
+            old_ptr.as_mut_ptr(),
+            new_ptr.as_mut_ptr(),
+            new_layout.size(),
+        );
+
+        self.deallocate(old_handle, old_layout);
+        Ok(new_handle)
     }
 }

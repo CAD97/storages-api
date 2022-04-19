@@ -1,11 +1,9 @@
 use {
-    crate::{
-        polyfill::layout_for_meta, Handle, MultipleStorage, PinningStorage,
-        SharedMutabilityStorage, SliceStorage, Storage,
-    },
+    crate::{Memory, MultipleStorage, PinningStorage, SharedMutabilityStorage, Storage},
     core::{
         alloc::{AllocError, Allocator, Layout},
-        ptr::{NonNull, Pointee},
+        mem::MaybeUninit,
+        ptr::NonNull,
     },
 };
 
@@ -20,57 +18,70 @@ impl<A: Allocator> AllocStorage<A> {
     }
 }
 
-unsafe impl<A: Allocator> SharedMutabilityStorage for AllocStorage<A> {}
-unsafe impl<A: Allocator> MultipleStorage for AllocStorage<A> {}
-unsafe impl<A: Allocator> PinningStorage for AllocStorage<A> {}
 unsafe impl<A: Allocator> Storage for AllocStorage<A> {
-    type Handle<T: ?Sized> = NonNull<T>;
+    type Handle = NonNull<()>;
 
-    unsafe fn create<T: ?Sized>(
-        &mut self,
-        meta: <T as Pointee>::Metadata,
-    ) -> Result<Self::Handle<T>, AllocError> {
-        let layout = layout_for_meta::<T>(meta).ok_or(AllocError)?;
-        let ptr = self.alloc.allocate(layout)?;
-        Ok(NonNull::from_raw_parts(ptr.cast(), meta))
+    fn allocate(&mut self, layout: Layout) -> Result<Self::Handle, AllocError> {
+        let (ptr, _meta) = self.alloc.allocate(layout)?.to_raw_parts();
+        Ok(ptr)
     }
 
-    unsafe fn destroy<T: ?Sized>(&mut self, handle: Self::Handle<T>) {
-        let layout = Layout::for_value_raw(handle.as_ptr());
+    unsafe fn deallocate(&mut self, handle: Self::Handle, layout: Layout) {
         self.alloc.deallocate(handle.cast(), layout)
     }
 
-    unsafe fn resolve<T: ?Sized>(&self, handle: Self::Handle<T>) -> NonNull<T> {
-        handle
+    unsafe fn resolve(&self, handle: Self::Handle, layout: Layout) -> &Memory {
+        NonNull::from_raw_parts(handle, layout.size()).as_ref()
     }
 
-    unsafe fn resolve_mut<T: ?Sized>(&mut self, handle: Self::Handle<T>) -> NonNull<T> {
-        handle
+    unsafe fn resolve_mut(&mut self, handle: Self::Handle, layout: Layout) -> &mut Memory {
+        NonNull::from_raw_parts(handle, layout.size()).as_mut()
+    }
+
+    unsafe fn grow(
+        &mut self,
+        handle: Self::Handle,
+        old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<Self::Handle, AllocError> {
+        let (ptr, _meta) = self
+            .alloc
+            .grow(handle.cast(), old_layout, new_layout)?
+            .to_raw_parts();
+        Ok(ptr)
+    }
+
+    unsafe fn shrink(
+        &mut self,
+        handle: Self::Handle,
+        old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<Self::Handle, AllocError> {
+        let (ptr, _meta) = self
+            .alloc
+            .shrink(handle.cast(), old_layout, new_layout)?
+            .to_raw_parts();
+        Ok(ptr)
     }
 }
 
-unsafe impl<A: Allocator> SliceStorage for AllocStorage<A> {
-    unsafe fn grow<T>(
+unsafe impl<A: Allocator> MultipleStorage for AllocStorage<A> {
+    unsafe fn resolve_many_mut<const N: usize>(
         &mut self,
-        handle: Self::Handle<[T]>,
-        new_len: usize,
-    ) -> Result<Self::Handle<[T]>, AllocError> {
-        let meta = handle.metadata();
-        let old_layout = Layout::for_value_raw(handle.as_ptr());
-        let new_layout = Layout::array::<T>(new_len).map_err(|_| AllocError)?;
-        let ptr = self.alloc.grow(handle.cast(), old_layout, new_layout)?;
-        Ok(NonNull::from_raw_parts(ptr.cast(), meta))
-    }
-
-    unsafe fn shrink<T>(
-        &mut self,
-        handle: Self::Handle<[T]>,
-        new_len: usize,
-    ) -> Result<Self::Handle<[T]>, AllocError> {
-        let meta = handle.metadata();
-        let old_layout = Layout::for_value_raw(handle.as_ptr());
-        let new_layout = Layout::array::<T>(new_len).map_err(|_| AllocError)?;
-        let ptr = self.alloc.shrink(handle.cast(), old_layout, new_layout)?;
-        Ok(NonNull::from_raw_parts(ptr.cast(), meta))
+        handles: [(Self::Handle, Layout); N],
+    ) -> [&mut Memory; N] {
+        let mut ptrs: [MaybeUninit<&mut Memory>; N] = MaybeUninit::uninit().assume_init();
+        for (ptr, (handle, layout)) in ptrs.iter_mut().zip(handles) {
+            ptr.write(self.resolve_raw(handle, layout));
+        }
+        MaybeUninit::array_assume_init(ptrs)
     }
 }
+
+unsafe impl<A: Allocator> SharedMutabilityStorage for AllocStorage<A> {
+    unsafe fn resolve_raw(&self, handle: Self::Handle, layout: Layout) -> &mut Memory {
+        NonNull::from_raw_parts(handle, layout.size()).as_mut()
+    }
+}
+
+unsafe impl<A: Allocator> PinningStorage for AllocStorage<A> {}
