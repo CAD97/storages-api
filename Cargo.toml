@@ -7,3 +7,4 @@ publish = false
 [features]
 
 [dependencies]
+unsize = "1.1.0"
