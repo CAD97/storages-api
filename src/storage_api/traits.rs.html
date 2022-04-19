@@ -226,8 +226,6 @@
 <span id="221">221</span>
 <span id="222">222</span>
 <span id="223">223</span>
-<span id="224">224</span>
-<span id="225">225</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">core</span>::{
     <span class="ident">alloc</span>::{<span class="ident">AllocError</span>, <span class="ident">Layout</span>},
     <span class="ident">hash::Hash</span>,
@@ -244,10 +242,8 @@
 <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">trait</span> <span class="ident">Storage</span> {
     <span class="doccomment">/// The handle which is used to access the stored memory.</span>
     <span class="doccomment">///</span>
-    <span class="doccomment">/// (This should probably also include `Send + Sync`, as only the Send/Sync</span>
-    <span class="doccomment">/// of the Storage matters, not the handles themselves, but the simplicity</span>
-    <span class="doccomment">/// of being able to use `ptr::NonNull&lt;()&gt;` as a handle is appealing.)</span>
-    <span class="kw">type</span> <span class="ident">Handle</span>: <span class="ident">Copy</span> <span class="op">+</span> <span class="ident">Ord</span> <span class="op">+</span> <span class="ident">Hash</span> <span class="op">+</span> <span class="ident">Unpin</span>;
+    <span class="doccomment">/// (Removing `Send + Sync` is enticing, as it allows using `ptr::NonNull`.)</span>
+    <span class="kw">type</span> <span class="ident">Handle</span>: <span class="ident">Copy</span> <span class="op">+</span> <span class="ident">Ord</span> <span class="op">+</span> <span class="ident">Hash</span> <span class="op">+</span> <span class="ident">Unpin</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Sync</span>;
 
     <span class="doccomment">/// Allocate memory handle in this storage.</span>
     <span class="doccomment">///</span>
