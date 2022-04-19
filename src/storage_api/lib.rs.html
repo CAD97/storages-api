@@ -60,6 +60,9 @@
 <span id="55">55</span>
 <span id="56">56</span>
 <span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
 </pre><pre class="rust"><code><span class="doccomment">//! A proof-of-concept implementation of (one version of) the storages proposal.</span>
 <span class="doccomment">//!</span>
 <span class="doccomment">//! Describing the raw storage API, we have:</span>
@@ -78,6 +81,7 @@
 <span class="doccomment">//! - [`InlineStorage`]: single storage located in the storage&#39;s bytes</span>
 <span class="doccomment">//! - [`AllocStorage`]: full-featured storage via allocation</span>
 <span class="doccomment">//! - [`SmallStorage`]: inline storage with a fallback to allocation</span>
+<span class="doccomment">//! - [`BorrowedStorage`]: single storage located in someone else&#39;s memory</span>
 
 <span class="attribute">#![<span class="ident">no_std</span>]</span>
 <span class="attribute">#![<span class="ident">feature</span>(
@@ -101,6 +105,7 @@
 )]</span>
 
 <span class="kw">mod</span> <span class="ident">alloc</span>;
+<span class="kw">mod</span> <span class="ident">borrowed</span>;
 <span class="kw">mod</span> <span class="ident">inline</span>;
 <span class="kw">mod</span> <span class="ident">polyfill</span>;
 <span class="kw">mod</span> <span class="ident">raw_box</span>;
@@ -111,6 +116,7 @@
 <span class="attribute">#[<span class="ident">doc</span>(<span class="ident">inline</span>)]</span>
 <span class="kw">pub</span> <span class="kw">use</span> <span class="kw">crate</span>::{
     <span class="ident">alloc::AllocStorage</span>,
+    <span class="ident">borrowed::BorrowedStorage</span>,
     <span class="ident">inline::InlineStorage</span>,
     <span class="ident">raw_box::RawBox</span>,
     <span class="ident">raw_vec::RawVec</span>,
