@@ -228,253 +228,231 @@
 <span id="223">223</span>
 <span id="224">224</span>
 <span id="225">225</span>
-<span id="226">226</span>
-<span id="227">227</span>
-<span id="228">228</span>
-<span id="229">229</span>
-<span id="230">230</span>
-<span id="231">231</span>
-<span id="232">232</span>
-<span id="233">233</span>
-<span id="234">234</span>
-<span id="235">235</span>
-<span id="236">236</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">core</span>::{
-    <span class="ident">alloc::AllocError</span>,
+    <span class="ident">alloc</span>::{<span class="ident">AllocError</span>, <span class="ident">Layout</span>},
+    <span class="ident">hash::Hash</span>,
     <span class="ident">mem::MaybeUninit</span>,
-    <span class="ident">ptr</span>::{<span class="ident">copy_nonoverlapping</span>, <span class="ident">metadata</span>, <span class="ident">NonNull</span>, <span class="ident">Pointee</span>},
+    <span class="ident">ptr::copy_nonoverlapping</span>,
 };
 
-<span class="doccomment">/// Types which can be used as a storage handle.</span>
-<span class="doccomment">///</span>
-<span class="doccomment">/// Generically, all you can do is extract the metadata or give it to the</span>
-<span class="doccomment">/// storage. Some other operations that might be useful/necessary to have in</span>
-<span class="doccomment">/// the future:</span>
-<span class="doccomment">///</span>
-<span class="doccomment">/// - `cast`</span>
-<span class="doccomment">/// - `unsize`</span>
-<span class="doccomment">/// - `with_metadata_of`</span>
-<span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">trait</span> <span class="ident">Handle</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span>: <span class="ident">Copy</span> {
-    <span class="kw">fn</span> <span class="ident">metadata</span>(<span class="self">self</span>) -&gt; <span class="op">&lt;</span><span class="ident">T</span> <span class="kw">as</span> <span class="ident">Pointee</span><span class="op">&gt;</span><span class="ident">::Metadata</span>;
-}
+<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">Memory</span> <span class="op">=</span> [<span class="ident">MaybeUninit</span><span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span>];
 
-<span class="doccomment">/// Types which can be used to store objects.</span>
+<span class="doccomment">/// Types which can be used to manage memory handles.</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// The behavior of this trait is refined by traits [`PinningStorage`],</span>
 <span class="doccomment">/// [`MultipleStorage`], and [`SharedMutabilityStorage`].</span>
-<span class="doccomment">///</span>
-<span class="doccomment">/// (I&#39;ve used `create`/`destroy` to clearly separate this from `Allocator`&#39;s</span>
-<span class="doccomment">/// `allocate`/`deallocate` language, but naming is to be bikeshedded further.)</span>
 <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">trait</span> <span class="ident">Storage</span> {
-    <span class="doccomment">/// The handle which is used to access</span>
-    <span class="kw">type</span> <span class="ident">Handle</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span>: <span class="ident">Handle</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>;
+    <span class="doccomment">/// The handle which is used to access the stored memory.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// (This should probably also include `Send + Sync`, as only the Send/Sync</span>
+    <span class="doccomment">/// of the Storage matters, not the handles themselves, but the simplicity</span>
+    <span class="doccomment">/// of being able to use `ptr::NonNull&lt;()&gt;` as a handle is appealing.)</span>
+    <span class="kw">type</span> <span class="ident">Handle</span>: <span class="ident">Copy</span> <span class="op">+</span> <span class="ident">Ord</span> <span class="op">+</span> <span class="ident">Hash</span> <span class="op">+</span> <span class="ident">Unpin</span>;
 
-    <span class="doccomment">/// Create an object handle in this storage.</span>
+    <span class="doccomment">/// Allocate memory handle in this storage.</span>
     <span class="doccomment">///</span>
-    <span class="doccomment">/// The handled object is not initialized.</span>
+    <span class="doccomment">/// The handled memory is not initialized. Any existing handles are</span>
+    <span class="doccomment">/// invalidated.</span>
     <span class="doccomment">///</span>
-    <span class="doccomment">/// (Do we want a `create_zeroed`?)</span>
+    <span class="doccomment">/// (Do we want an `allocate_zeroed`?)</span>
+    <span class="kw">fn</span> <span class="ident">allocate</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">layout</span>: <span class="ident">Layout</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Handle</span>, <span class="ident">AllocError</span><span class="op">&gt;</span>;
+
+    <span class="doccomment">/// Deallocate an object handle in this storage.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// The handled memory is not required to be valid in any way. The handle is</span>
+    <span class="doccomment">/// invalidated.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// # Safety</span>
     <span class="doccomment">///</span>
-    <span class="doccomment">/// - Any previously created handles have been destroyed.</span>
-    <span class="doccomment">///   - (This can maybe be loosened to it invalidating existing handles?)</span>
-    <span class="doccomment">/// - The metadata must describe a layout valid for a rust object.</span>
-    <span class="doccomment">///   - This exists due to the safety requirements of `size_of_val_raw`</span>
-    <span class="doccomment">///     and `align_of_val_raw`. I think we need a way to go compute layout</span>
-    <span class="doccomment">///     from metadata safely, with a check that it produces a valid layout.</span>
-    <span class="doccomment">///   - On each unsized kind, this would imply:</span>
-    <span class="doccomment">///     - slices: size computation uses saturating/checked multiplication</span>
-    <span class="doccomment">///     - traits: vtable must always be valid (as a safety invariant)</span>
-    <span class="doccomment">///     - composites: size computation uses saturating/checked addition</span>
-    <span class="doccomment">///     - externs: any valid metadata must compute valid size/align or None</span>
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">create</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span>(
-        <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
-        <span class="ident">meta</span>: <span class="op">&lt;</span><span class="ident">T</span> <span class="kw">as</span> <span class="ident">Pointee</span><span class="op">&gt;</span><span class="ident">::Metadata</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Handle</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>, <span class="ident">AllocError</span><span class="op">&gt;</span>;
+    <span class="doccomment">/// - The handle must have been created by this storage, and must not have</span>
+    <span class="doccomment">///   been invalidated.</span>
+    <span class="doccomment">/// - The layout must be the same as used to allocate the handle.</span>
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">deallocate</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span>, <span class="ident">layout</span>: <span class="ident">Layout</span>);
 
-    <span class="doccomment">/// Destroy an object handle in this storage.</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// The handled object is not modified nor required to be valid in any way.</span>
+    <span class="doccomment">/// Resolve a memory handle in this storage to a reference.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// # Safety</span>
     <span class="doccomment">///</span>
-    <span class="doccomment">/// - The handle must have previously been created by this storage,</span>
-    <span class="doccomment">///   and must not have been destroyed.</span>
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">destroy</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>);
+    <span class="doccomment">/// - The handle must have been created by this storage, and must not have</span>
+    <span class="doccomment">///   been invalidated.</span>
+    <span class="doccomment">/// - The layout must be the same as used to allocate the handle.</span>
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">resolve</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span>, <span class="ident">layout</span>: <span class="ident">Layout</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">Memory</span>;
 
-    <span class="doccomment">/// Resolve an object handle in this storage to a pointer.</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// The returned pointer is valid *for reads only* and is invalidated</span>
-    <span class="doccomment">/// when the storage is moved or used mutably.</span>
+    <span class="doccomment">/// Resolve a memory handle in this storage to a mutable reference.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// # Safety</span>
     <span class="doccomment">///</span>
-    <span class="doccomment">/// - The handle must have previously been created by this storage,</span>
-    <span class="doccomment">///   and must not have been destroyed or invalidated.</span>
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">resolve</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>) -&gt; <span class="ident">NonNull</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>;
+    <span class="doccomment">/// - The handle must have been created by this storage, and must not have</span>
+    <span class="doccomment">///   been invalidated.</span>
+    <span class="doccomment">/// - The layout must be the same as used to allocate the handle.</span>
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">resolve_mut</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span>, <span class="ident">layout</span>: <span class="ident">Layout</span>) -&gt; <span class="kw-2">&amp;mut</span> <span class="ident">Memory</span>;
 
-    <span class="doccomment">/// Resolve an object handle in this storage to a pointer.</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// The returned pointer is valid for both reads and writes and is</span>
-    <span class="doccomment">/// invalidated when the storage is moved or used mutably. (This includes</span>
-    <span class="doccomment">/// but is not limited to further calls to `resolve_mut`.)</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// # Safety</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// - The handle must have previously been created by this storage,</span>
-    <span class="doccomment">///   and must not have been destroyed or invalidated.</span>
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">resolve_mut</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>) -&gt; <span class="ident">NonNull</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>;
-}
-
-<span class="doccomment">/// A storage that creates pinned handles.</span>
-<span class="doccomment">///</span>
-<span class="doccomment">/// Any objects created inside of this storage will not be moved nor their</span>
-<span class="doccomment">/// backing memory reused until [`destroy`] is called on their handle.</span>
-<span class="doccomment">/// (Equivalently: [`resolve`] and [`resolve_mut`] return `Pin&lt;NonNull&lt;T&gt;&gt;`).</span>
-<span class="doccomment">///</span>
-<span class="doccomment">/// [`destroy`]: Storage::destroy</span>
-<span class="doccomment">/// [`resolve`]: Storage::resolve</span>
-<span class="doccomment">/// [`resolve_mut`]: Storage::resolve_mut</span>
-<span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">trait</span> <span class="ident">PinningStorage</span>: <span class="ident">Storage</span> {}
-
-<span class="doccomment">/// A storage that can create multiple handles.</span>
-<span class="doccomment">///</span>
-<span class="doccomment">/// The restriction that [`create`] can not be called until the previously</span>
-<span class="doccomment">/// created handle has been [`destroy`]ed is removed. You can `create` multiple</span>
-<span class="doccomment">/// handles that are all valid at the same time. This does not change the</span>
-<span class="doccomment">/// requirements of [`resolve`] or [`resolve_mut`]; only one pointer returned</span>
-<span class="doccomment">/// from `resolve_mut` is valid at a time.</span>
-<span class="doccomment">///</span>
-<span class="doccomment">/// (In theory, we&#39;re missing the ability to `create` multiple handles to a</span>
-<span class="doccomment">/// `!SharedMutabilityStorage` and access their objects mutably simultaneously.</span>
-<span class="doccomment">/// This is possible to do soundly (for the homogeneously-typed case, store a</span>
-<span class="doccomment">/// slice/array and `split_at_mut` it), but seems rare enough in practice that</span>
-<span class="doccomment">/// the complexity to support it doesn&#39;t seem warranted? Such a function would</span>
-<span class="doccomment">/// live on this trait and could look like the following:</span>
-<span class="doccomment">///</span>
-<span class="doccomment">/// ```rust,compile_fail</span>
-<span class="doccomment">/// unsafe fn resolve_many_mut&lt;T: ?Sized, N: usize&gt;(</span>
-<span class="doccomment">///     &amp;mut self,</span>
-<span class="doccomment">///     handles: [Self::Handle&lt;T&gt;; N],</span>
-<span class="doccomment">/// ) -&gt; [NonNull&lt;T&gt;; N];</span>
-<span class="doccomment">/// ```</span>
-<span class="doccomment">///</span>
-<span class="doccomment">/// The reason for this restriction is that reborrowing `&amp;mut Storage` to call</span>
-<span class="doccomment">/// `resolve_mut` invalidates any references/pointers derived from the previous</span>
-<span class="doccomment">/// reborrow of `&amp;mut Storage`. This is fundamental to `&amp;mut` being `noalias`.)</span>
-<span class="doccomment">///</span>
-<span class="doccomment">/// [`create`]: Storage::create</span>
-<span class="doccomment">/// [`destroy`]: Storage::destroy</span>
-<span class="doccomment">/// [`resolve`]: Storage::resolve</span>
-<span class="doccomment">/// [`resolve_mut`]: Storage::resolve_mut</span>
-<span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">trait</span> <span class="ident">MultipleStorage</span>: <span class="ident">Storage</span> {}
-
-<span class="doccomment">/// A storage that serves as a uniqueness barrier.</span>
-<span class="doccomment">///</span>
-<span class="doccomment">/// Pointers returned from [`resolve`][Storage::resolve] are valid for writes.</span>
-<span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">trait</span> <span class="ident">SharedMutabilityStorage</span>: <span class="ident">Storage</span> {}
-
-<span class="doccomment">/// A storage that can reallocate to adjust the length of slice objects.</span>
-<span class="doccomment">///</span>
-<span class="doccomment">/// Automatically provided for any [`MultipleStorage`] by allocating a new</span>
-<span class="doccomment">/// object and copying the old allocation into the new one.</span>
-<span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">trait</span> <span class="ident">SliceStorage</span>: <span class="ident">Storage</span> {
-    <span class="doccomment">/// Grow a slice handle to a larger size.</span>
+    <span class="doccomment">/// Grow a memory handle to a larger size.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// If this function succeeds, then the old handle is invalidated and the</span>
-    <span class="doccomment">/// handled object has been moved into the new handle. The new length is</span>
+    <span class="doccomment">/// handled memory has been moved into the new handle. The new length is</span>
     <span class="doccomment">/// uninitialized.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// (Do we want a `grow_zeroed`?)</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// If this function fails, then the old handle is not invalidated and</span>
-    <span class="doccomment">/// still contains the object.</span>
+    <span class="doccomment">/// still contains the memory in its state before calling this function.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// # Safety</span>
     <span class="doccomment">///</span>
-    <span class="doccomment">/// - The handle must have previously been created by this storage,</span>
-    <span class="doccomment">///   and must not have been destroyed or invalidated.</span>
-    <span class="doccomment">/// - `new_len` must be longer than the existing slice length.</span>
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">grow</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>(
+    <span class="doccomment">/// - The handle must have been created by this storage, and must not have</span>
+    <span class="doccomment">///   been invalidated.</span>
+    <span class="doccomment">/// - `old_layout` must be the same as used to allocate the handle.</span>
+    <span class="doccomment">/// - `new_layout.size() &gt;= old_layout.size()`.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// Note that `new_layout.align()` is not required to be the same as</span>
+    <span class="doccomment">/// `old_layout.align()`</span>
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">grow</span>(
         <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
-        <span class="ident">handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span><span class="op">&lt;</span>[<span class="ident">T</span>]<span class="op">&gt;</span>,
-        <span class="ident">new_len</span>: <span class="ident">usize</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Handle</span><span class="op">&lt;</span>[<span class="ident">T</span>]<span class="op">&gt;</span>, <span class="ident">AllocError</span><span class="op">&gt;</span>;
+        <span class="ident">handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span>,
+        <span class="ident">old_layout</span>: <span class="ident">Layout</span>,
+        <span class="ident">new_layout</span>: <span class="ident">Layout</span>,
+    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Handle</span>, <span class="ident">AllocError</span><span class="op">&gt;</span>;
 
-    <span class="doccomment">/// Shrink a slice handle to a smaller size.</span>
+    <span class="doccomment">/// Shrink a memory handle to a smaller size.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// If this function succeeds, then the old handle is invalidated and the</span>
-    <span class="doccomment">/// prefix of the handled object has been moved into the new handle.</span>
+    <span class="doccomment">/// prefix of the handled memory has been moved into the new handle.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// If this function fails, then the old handle is not invalidated and</span>
-    <span class="doccomment">/// still contains the object.</span>
+    <span class="doccomment">/// still contains the memory in its state before calling this function.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// # Safety</span>
     <span class="doccomment">///</span>
-    <span class="doccomment">/// - The handle must have previously been created by this storage,</span>
-    <span class="doccomment">///   and must not have been destroyed or invalidated.</span>
-    <span class="doccomment">/// - `new_len` must be shorter than the existing slice length.</span>
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">shrink</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>(
+    <span class="doccomment">/// - The handle must have been created by this storage, and must not have</span>
+    <span class="doccomment">///   been invalidated.</span>
+    <span class="doccomment">/// - `old_layout` must be the same as used to allocate the handle.</span>
+    <span class="doccomment">/// - `new_layout.size() &lt;= old_layout.size()`.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// Note that `new_layout.align()` is not required to be the same as</span>
+    <span class="doccomment">/// `old_layout.align()`</span>
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">shrink</span>(
         <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
-        <span class="ident">handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span><span class="op">&lt;</span>[<span class="ident">T</span>]<span class="op">&gt;</span>,
-        <span class="ident">new_len</span>: <span class="ident">usize</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Handle</span><span class="op">&lt;</span>[<span class="ident">T</span>]<span class="op">&gt;</span>, <span class="ident">AllocError</span><span class="op">&gt;</span>;
+        <span class="ident">handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span>,
+        <span class="ident">old_layout</span>: <span class="ident">Layout</span>,
+        <span class="ident">new_layout</span>: <span class="ident">Layout</span>,
+    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Handle</span>, <span class="ident">AllocError</span><span class="op">&gt;</span>;
 }
 
-<span class="ident">default</span> <span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span>: <span class="ident">MultipleStorage</span><span class="op">&gt;</span> <span class="ident">SliceStorage</span> <span class="kw">for</span> <span class="ident">S</span> {
-    <span class="ident">default</span> <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">grow</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>(
+<span class="doccomment">/// A storage that allocates pinned memory handles.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// Any memory allocated inside of this storage will not be moved nor reused</span>
+<span class="doccomment">/// until [`deallocate`] is called on its handle. As such, an object in the</span>
+<span class="doccomment">/// memory can be safely pinned.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// [`deallocate`]: Storage::deallocate</span>
+<span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">trait</span> <span class="ident">PinningStorage</span>: <span class="ident">Storage</span> {}
+
+<span class="doccomment">/// A storage that can manage multiple memory handles.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// [`allocate`] no longer invalidates existing handles. You can `allocate`</span>
+<span class="doccomment">/// multiple handles that are all valid at the same time. This does not change</span>
+<span class="doccomment">/// the requirements of [`resolve`] or [`resolve_mut`]; only one pointer</span>
+<span class="doccomment">/// returned from `resolve_mut` is valid at a time.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// In addition, [`grow`] and [`shrink`] are implemented at least at least as</span>
+<span class="doccomment">/// well as creating a new handle and copying over the old contents. (This is</span>
+<span class="doccomment">/// provided by default impl.)</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// [`allocate`]: Storage::allocate</span>
+<span class="doccomment">/// [`resolve`]: Storage::resolve</span>
+<span class="doccomment">/// [`resolve_mut`]: Storage::resolve_mut</span>
+<span class="doccomment">/// [`grow`]: Storage::grow</span>
+<span class="doccomment">/// [`shrink`]: Storage::shrink</span>
+<span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">trait</span> <span class="ident">MultipleStorage</span>: <span class="ident">Storage</span> {
+    <span class="doccomment">/// Resolve memory handles in this storage to mutable references.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// # Safety</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// - The handles must have been created by this storage, and must not have</span>
+    <span class="doccomment">///   been invalidated.</span>
+    <span class="doccomment">/// - The layout must be the same as used to allocate the handle.</span>
+    <span class="doccomment">/// - The same handle must not be resolved twice in a single call.</span>
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">resolve_many_mut</span><span class="op">&lt;</span><span class="kw">const</span> <span class="ident">N</span>: <span class="ident">usize</span><span class="op">&gt;</span>(
         <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
-        <span class="ident">old_handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span><span class="op">&lt;</span>[<span class="ident">T</span>]<span class="op">&gt;</span>,
-        <span class="ident">new_len</span>: <span class="ident">usize</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Handle</span><span class="op">&lt;</span>[<span class="ident">T</span>]<span class="op">&gt;</span>, <span class="ident">AllocError</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">new_handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span><span class="op">&lt;</span>[<span class="ident">T</span>]<span class="op">&gt;</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">create</span>(<span class="ident">new_len</span>)<span class="question-mark">?</span>;
-        <span class="kw">let</span> <span class="ident">new_ptr</span>: <span class="ident">NonNull</span><span class="op">&lt;</span>[<span class="ident">T</span>]<span class="op">&gt;</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">resolve_mut</span>(<span class="ident">new_handle</span>);
+        <span class="ident">handles</span>: [(<span class="ident"><span class="self">Self</span>::Handle</span>, <span class="ident">Layout</span>); <span class="ident">N</span>],
+    ) -&gt; [<span class="kw-2">&amp;mut</span> <span class="ident">Memory</span>; <span class="ident">N</span>];
+}
 
-        <span class="kw">let</span> <span class="ident">old_ptr</span>: <span class="ident">NonNull</span><span class="op">&lt;</span>[<span class="ident">T</span>]<span class="op">&gt;</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">resolve_mut</span>(<span class="ident">old_handle</span>);
-        <span class="kw">let</span> <span class="ident">old_len</span>: <span class="ident">usize</span> <span class="op">=</span> <span class="ident">metadata</span>(<span class="ident">old_ptr</span>.<span class="ident">as_ptr</span>());
+<span class="doccomment">/// A storage that serves as a uniqueness barrier.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// Notably, this means that this storage can go `&amp;Storage -&gt; &amp;mut Memory`, and</span>
+<span class="doccomment">/// thus it is possible to mutate the stored memory behind a shared storage</span>
+<span class="doccomment">/// reference, and to mutably resolve multiple handles separately without</span>
+<span class="doccomment">/// invalidating previously resolved handles.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// [`resolve`]: Storage::resolve</span>
+<span class="doccomment">/// [`resolve_mut`]: Storage::resolve_mut</span>
+<span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">trait</span> <span class="ident">SharedMutabilityStorage</span>: <span class="ident">Storage</span> {
+    <span class="doccomment">/// Resolve a memory handle in this storage to a mutable reference.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// # Safety</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// - The handle must have been created by this storage, and must not have</span>
+    <span class="doccomment">///   been invalidated.</span>
+    <span class="doccomment">/// - The layout must be the same as used to allocate the handle.</span>
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">resolve_raw</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span>, <span class="ident">layout</span>: <span class="ident">Layout</span>) -&gt; <span class="kw-2">&amp;mut</span> <span class="ident">Memory</span>;
+}
 
-        <span class="macro">debug_assert!</span>(<span class="ident">new_len</span> <span class="op">&gt;</span><span class="op">=</span> <span class="ident">old_len</span>, <span class="string">&quot;invalid arguments to Storage::grow&quot;</span>);
-
-        <span class="ident">copy_nonoverlapping</span>(
-            <span class="ident">old_ptr</span>.<span class="ident">as_ptr</span>().<span class="ident">cast</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>(),
-            <span class="ident">new_ptr</span>.<span class="ident">as_ptr</span>().<span class="ident">cast</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>(),
-            <span class="ident">old_len</span>,
+<span class="ident">default</span> <span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span> <span class="ident">Storage</span> <span class="kw">for</span> <span class="ident">S</span>
+<span class="kw">where</span>
+    <span class="ident">S</span>: <span class="ident">MultipleStorage</span>,
+{
+    <span class="ident">default</span> <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">grow</span>(
+        <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
+        <span class="ident">old_handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span>,
+        <span class="ident">old_layout</span>: <span class="ident">Layout</span>,
+        <span class="ident">new_layout</span>: <span class="ident">Layout</span>,
+    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Handle</span>, <span class="ident">AllocError</span><span class="op">&gt;</span> {
+        <span class="macro">debug_assert!</span>(
+            <span class="ident">new_layout</span>.<span class="ident">size</span>() <span class="op">&gt;</span><span class="op">=</span> <span class="ident">old_layout</span>.<span class="ident">size</span>(),
+            <span class="string">&quot;invalid arguments to Storage::grow&quot;</span>,
         );
 
-        <span class="self">self</span>.<span class="ident">destroy</span>(<span class="ident">old_handle</span>);
+        <span class="kw">let</span> <span class="ident">new_handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">allocate</span>(<span class="ident">new_layout</span>)<span class="question-mark">?</span>;
+        <span class="kw">let</span> [<span class="ident">new_ptr</span>, <span class="ident">old_ptr</span>] <span class="op">=</span>
+            <span class="self">self</span>.<span class="ident">resolve_many_mut</span>([(<span class="ident">new_handle</span>, <span class="ident">new_layout</span>), (<span class="ident">old_handle</span>, <span class="ident">old_layout</span>)]);
+
+        <span class="ident">copy_nonoverlapping</span>(
+            <span class="ident">old_ptr</span>.<span class="ident">as_mut_ptr</span>(),
+            <span class="ident">new_ptr</span>.<span class="ident">as_mut_ptr</span>(),
+            <span class="ident">old_layout</span>.<span class="ident">size</span>(),
+        );
+
+        <span class="self">self</span>.<span class="ident">deallocate</span>(<span class="ident">old_handle</span>, <span class="ident">old_layout</span>);
         <span class="prelude-val">Ok</span>(<span class="ident">new_handle</span>)
     }
 
-    <span class="ident">default</span> <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">shrink</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>(
+    <span class="ident">default</span> <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">shrink</span>(
         <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
-        <span class="ident">old_handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span><span class="op">&lt;</span>[<span class="ident">T</span>]<span class="op">&gt;</span>,
-        <span class="ident">new_len</span>: <span class="ident">usize</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Handle</span><span class="op">&lt;</span>[<span class="ident">T</span>]<span class="op">&gt;</span>, <span class="ident">AllocError</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">new_handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span><span class="op">&lt;</span>[<span class="ident">T</span>]<span class="op">&gt;</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">create</span>(<span class="ident">new_len</span>)<span class="question-mark">?</span>;
-        <span class="kw">let</span> <span class="ident">new_ptr</span>: <span class="ident">NonNull</span><span class="op">&lt;</span>[<span class="ident">T</span>]<span class="op">&gt;</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">resolve_mut</span>(<span class="ident">new_handle</span>);
-
-        <span class="kw">let</span> <span class="ident">old_ptr</span>: <span class="ident">NonNull</span><span class="op">&lt;</span>[<span class="ident">T</span>]<span class="op">&gt;</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">resolve_mut</span>(<span class="ident">old_handle</span>);
-        <span class="kw">let</span> <span class="ident">old_len</span>: <span class="ident">usize</span> <span class="op">=</span> <span class="ident">metadata</span>(<span class="ident">old_ptr</span>.<span class="ident">as_ptr</span>());
-
-        <span class="macro">debug_assert!</span>(<span class="ident">new_len</span> <span class="op">&lt;</span><span class="op">=</span> <span class="ident">old_len</span>, <span class="string">&quot;invalid arguments to Storage::grow&quot;</span>);
-
-        <span class="ident">copy_nonoverlapping</span>(
-            <span class="ident">old_ptr</span>.<span class="ident">as_ptr</span>().<span class="ident">cast</span>::<span class="op">&lt;</span><span class="ident">MaybeUninit</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span>(),
-            <span class="ident">new_ptr</span>.<span class="ident">as_ptr</span>().<span class="ident">cast</span>::<span class="op">&lt;</span><span class="ident">MaybeUninit</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span>(),
-            <span class="ident">new_len</span>,
+        <span class="ident">old_handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span>,
+        <span class="ident">old_layout</span>: <span class="ident">Layout</span>,
+        <span class="ident">new_layout</span>: <span class="ident">Layout</span>,
+    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Handle</span>, <span class="ident">AllocError</span><span class="op">&gt;</span> {
+        <span class="macro">debug_assert!</span>(
+            <span class="ident">new_layout</span>.<span class="ident">size</span>() <span class="op">&lt;</span><span class="op">=</span> <span class="ident">old_layout</span>.<span class="ident">size</span>(),
+            <span class="string">&quot;invalid arguments to Storage::shrink&quot;</span>,
         );
 
-        <span class="self">self</span>.<span class="ident">destroy</span>(<span class="ident">old_handle</span>);
-        <span class="prelude-val">Ok</span>(<span class="ident">new_handle</span>)
-    }
-}
+        <span class="kw">let</span> <span class="ident">new_handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">allocate</span>(<span class="ident">new_layout</span>)<span class="question-mark">?</span>;
+        <span class="kw">let</span> [<span class="ident">new_ptr</span>, <span class="ident">old_ptr</span>] <span class="op">=</span>
+            <span class="self">self</span>.<span class="ident">resolve_many_mut</span>([(<span class="ident">new_handle</span>, <span class="ident">new_layout</span>), (<span class="ident">old_handle</span>, <span class="ident">old_layout</span>)]);
 
-<span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span> <span class="ident">Handle</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">NonNull</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
-    <span class="kw">fn</span> <span class="ident">metadata</span>(<span class="self">self</span>) -&gt; <span class="op">&lt;</span><span class="ident">T</span> <span class="kw">as</span> <span class="ident">Pointee</span><span class="op">&gt;</span><span class="ident">::Metadata</span> {
-        <span class="ident">metadata</span>(<span class="self">self</span>.<span class="ident">as_ptr</span>())
+        <span class="ident">copy_nonoverlapping</span>(
+            <span class="ident">old_ptr</span>.<span class="ident">as_mut_ptr</span>(),
+            <span class="ident">new_ptr</span>.<span class="ident">as_mut_ptr</span>(),
+            <span class="ident">new_layout</span>.<span class="ident">size</span>(),
+        );
+
+        <span class="self">self</span>.<span class="ident">deallocate</span>(<span class="ident">old_handle</span>, <span class="ident">old_layout</span>);
+        <span class="prelude-val">Ok</span>(<span class="ident">new_handle</span>)
     }
 }
 </code></pre></div>
-</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="storage_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.62.0-nightly (52ca603da 2022-04-12)" ></div>
+</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="storage_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.62.0-nightly (311e2683e 2022-04-18)" ></div>
 </body></html>

@@ -129,16 +129,53 @@
 <span id="124">124</span>
 <span id="125">125</span>
 <span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+<span id="129">129</span>
+<span id="130">130</span>
+<span id="131">131</span>
+<span id="132">132</span>
+<span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
 </pre><pre class="rust"><code><span class="kw">use</span> {
-    <span class="kw">crate</span>::{<span class="ident">AllocStorage</span>, <span class="ident">Handle</span>, <span class="ident">InlineStorage</span>, <span class="ident">InlineStorageHandle</span>, <span class="ident">Storage</span>},
+    <span class="kw">crate</span>::{<span class="ident">AllocStorage</span>, <span class="ident">InlineStorage</span>, <span class="ident">Memory</span>, <span class="ident">Storage</span>},
     <span class="ident">core</span>::{
-        <span class="ident">alloc</span>::{<span class="ident">AllocError</span>, <span class="ident">Allocator</span>},
-        <span class="ident">cmp::Ordering</span>,
-        <span class="ident">ptr</span>::{<span class="ident">NonNull</span>, <span class="ident">Pointee</span>},
+        <span class="ident">alloc</span>::{<span class="ident">AllocError</span>, <span class="ident">Allocator</span>, <span class="ident">Layout</span>},
+        <span class="ident">hint::unreachable_unchecked</span>,
+        <span class="ident">ptr::copy_nonoverlapping</span>,
     },
 };
 
-<span class="doccomment">/// A single storage which stores objects inline if it fits, otherwise falling</span>
+<span class="doccomment">/// A single storage which stores memory inline if it fits, otherwise falling</span>
 <span class="doccomment">/// back to using an [`Allocator`].</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// The `DataStore` type parameter determines the layout of the inline storage.</span>
@@ -149,10 +186,6 @@
     <span class="ident">outline</span>: <span class="ident">AllocStorage</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>,
 }
 
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">SmallStorageHandle</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span> {
-    <span class="ident">meta</span>: <span class="op">&lt;</span><span class="ident">T</span> <span class="kw">as</span> <span class="ident">Pointee</span><span class="op">&gt;</span><span class="ident">::Metadata</span>,
-}
-
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">DataStore</span>, <span class="ident">A</span>: <span class="ident">Allocator</span><span class="op">&gt;</span> <span class="ident">SmallStorage</span><span class="op">&lt;</span><span class="ident">DataStore</span>, <span class="ident">A</span><span class="op">&gt;</span> {
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">alloc</span>: <span class="ident">A</span>) -&gt; <span class="self">Self</span> {
         <span class="self">Self</span> {
@@ -160,101 +193,142 @@
             <span class="ident">outline</span>: <span class="ident">AllocStorage::new</span>(<span class="ident">alloc</span>),
         }
     }
+
+    <span class="kw">const</span> <span class="ident">OUTLINE_HANDLE_LAYOUT</span>: <span class="ident">Layout</span> <span class="op">=</span> <span class="ident">Layout::new</span>::<span class="op">&lt;</span><span class="op">&lt;</span><span class="ident">AllocStorage</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> <span class="kw">as</span> <span class="ident">Storage</span><span class="op">&gt;</span><span class="ident">::Handle</span><span class="op">&gt;</span>();
 }
 
 <span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">DataStore</span>, <span class="ident">A</span>: <span class="ident">Allocator</span><span class="op">&gt;</span> <span class="ident">Storage</span> <span class="kw">for</span> <span class="ident">SmallStorage</span><span class="op">&lt;</span><span class="ident">DataStore</span>, <span class="ident">A</span><span class="op">&gt;</span> {
-    <span class="kw">type</span> <span class="ident">Handle</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">SmallStorageHandle</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>;
+    <span class="kw">type</span> <span class="ident">Handle</span> <span class="op">=</span> ();
 
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">create</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span>(
+    <span class="kw">fn</span> <span class="ident">allocate</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">layout</span>: <span class="ident">Layout</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Handle</span>, <span class="ident">AllocError</span><span class="op">&gt;</span> {
+        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">fits</span>(<span class="ident">layout</span>) {
+            <span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">allocate</span>(<span class="ident">layout</span>)
+        } <span class="kw">else</span> {
+            <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">outline</span>.<span class="ident">allocate</span>(<span class="ident">layout</span>)<span class="question-mark">?</span>;
+            <span class="kw">let</span> <span class="ident">addr_handle</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">allocate</span>(<span class="ident"><span class="self">Self</span>::OUTLINE_HANDLE_LAYOUT</span>)<span class="question-mark">?</span>;
+            <span class="kw">unsafe</span> {
+                <span class="kw-2">*</span><span class="self">self</span>
+                    .<span class="ident">inline</span>
+                    .<span class="ident">resolve_mut</span>(<span class="ident">addr_handle</span>, <span class="ident"><span class="self">Self</span>::OUTLINE_HANDLE_LAYOUT</span>)
+                    .<span class="ident">as_mut_ptr</span>()
+                    .<span class="ident">cast</span>() <span class="op">=</span> <span class="ident">addr</span>;
+            }
+            <span class="prelude-val">Ok</span>(<span class="ident">addr_handle</span>)
+        }
+    }
+
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">deallocate</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span>, <span class="ident">layout</span>: <span class="ident">Layout</span>) {
+        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">fits</span>(<span class="ident">layout</span>) {
+            <span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">deallocate</span>(<span class="ident">handle</span>, <span class="ident">layout</span>)
+        } <span class="kw">else</span> {
+            <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="kw-2">*</span><span class="self">self</span>
+                .<span class="ident">inline</span>
+                .<span class="ident">resolve_mut</span>(<span class="ident">handle</span>, <span class="ident"><span class="self">Self</span>::OUTLINE_HANDLE_LAYOUT</span>)
+                .<span class="ident">as_ptr</span>()
+                .<span class="ident">cast</span>();
+            <span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">deallocate</span>(<span class="ident">handle</span>, <span class="ident"><span class="self">Self</span>::OUTLINE_HANDLE_LAYOUT</span>);
+            <span class="self">self</span>.<span class="ident">outline</span>.<span class="ident">deallocate</span>(<span class="ident">addr</span>, <span class="ident">layout</span>);
+        }
+    }
+
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">resolve</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span>, <span class="ident">layout</span>: <span class="ident">Layout</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">Memory</span> {
+        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">fits</span>(<span class="ident">layout</span>) {
+            <span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">resolve</span>(<span class="ident">handle</span>, <span class="ident">layout</span>)
+        } <span class="kw">else</span> {
+            <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="kw-2">*</span><span class="self">self</span>
+                .<span class="ident">inline</span>
+                .<span class="ident">resolve</span>(<span class="ident">handle</span>, <span class="ident"><span class="self">Self</span>::OUTLINE_HANDLE_LAYOUT</span>)
+                .<span class="ident">as_ptr</span>()
+                .<span class="ident">cast</span>();
+            <span class="self">self</span>.<span class="ident">outline</span>.<span class="ident">resolve</span>(<span class="ident">addr</span>, <span class="ident">layout</span>)
+        }
+    }
+
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">resolve_mut</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span>, <span class="ident">layout</span>: <span class="ident">Layout</span>) -&gt; <span class="kw-2">&amp;mut</span> <span class="ident">Memory</span> {
+        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">fits</span>(<span class="ident">layout</span>) {
+            <span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">resolve_mut</span>(<span class="ident">handle</span>, <span class="ident">layout</span>)
+        } <span class="kw">else</span> {
+            <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="kw-2">*</span><span class="self">self</span>
+                .<span class="ident">inline</span>
+                .<span class="ident">resolve_mut</span>(<span class="ident">handle</span>, <span class="ident"><span class="self">Self</span>::OUTLINE_HANDLE_LAYOUT</span>)
+                .<span class="ident">as_mut_ptr</span>()
+                .<span class="ident">cast</span>();
+            <span class="self">self</span>.<span class="ident">outline</span>.<span class="ident">resolve_mut</span>(<span class="ident">addr</span>, <span class="ident">layout</span>)
+        }
+    }
+
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">grow</span>(
         <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
-        <span class="ident">meta</span>: <span class="op">&lt;</span><span class="ident">T</span> <span class="kw">as</span> <span class="ident">core::ptr::Pointee</span><span class="op">&gt;</span><span class="ident">::Metadata</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Handle</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>, <span class="ident">AllocError</span><span class="op">&gt;</span> {
-        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">fits</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>(<span class="ident">meta</span>) {
-            <span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">create</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>(<span class="ident">meta</span>)<span class="question-mark">?</span>;
-            <span class="prelude-val">Ok</span>(<span class="ident">SmallStorageHandle</span> { <span class="ident">meta</span> })
-        } <span class="kw">else</span> {
-            <span class="kw">let</span> (<span class="ident">addr</span>, <span class="kw">_</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">outline</span>.<span class="ident">create</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>(<span class="ident">meta</span>)<span class="question-mark">?</span>.<span class="ident">to_raw_parts</span>();
-            <span class="kw">let</span> <span class="ident">addr_handle</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">create</span>::<span class="op">&lt;</span><span class="ident">NonNull</span><span class="op">&lt;</span>()<span class="op">&gt;</span><span class="op">&gt;</span>(())<span class="question-mark">?</span>;
-            <span class="kw-2">*</span><span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">resolve_mut</span>(<span class="ident">addr_handle</span>).<span class="ident">as_ptr</span>() <span class="op">=</span> <span class="ident">addr</span>;
-            <span class="prelude-val">Ok</span>(<span class="ident">SmallStorageHandle</span> { <span class="ident">meta</span> })
+        <span class="ident">handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span>,
+        <span class="ident">old_layout</span>: <span class="ident">Layout</span>,
+        <span class="ident">new_layout</span>: <span class="ident">Layout</span>,
+    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Handle</span>, <span class="ident">AllocError</span><span class="op">&gt;</span> {
+        <span class="kw">match</span> (<span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">fits</span>(<span class="ident">old_layout</span>), <span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">fits</span>(<span class="ident">new_layout</span>)) {
+            (<span class="bool-val">true</span>, <span class="bool-val">true</span>) =&gt; <span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">grow</span>(<span class="ident">handle</span>, <span class="ident">old_layout</span>, <span class="ident">new_layout</span>),
+            (<span class="bool-val">false</span>, <span class="bool-val">true</span>) =&gt; <span class="ident">unreachable_unchecked</span>(),
+            (<span class="bool-val">false</span>, <span class="bool-val">false</span>) =&gt; {
+                <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="self">self</span>
+                    .<span class="ident">inline</span>
+                    .<span class="ident">resolve_mut</span>(<span class="ident">handle</span>, <span class="ident"><span class="self">Self</span>::OUTLINE_HANDLE_LAYOUT</span>)
+                    .<span class="ident">as_mut_ptr</span>()
+                    .<span class="ident">cast</span>();
+                <span class="kw-2">*</span><span class="ident">addr</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">outline</span>.<span class="ident">grow</span>(<span class="kw-2">*</span><span class="ident">addr</span>, <span class="ident">old_layout</span>, <span class="ident">new_layout</span>)<span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>(<span class="ident">handle</span>)
+            },
+            (<span class="bool-val">true</span>, <span class="bool-val">false</span>) =&gt; {
+                <span class="kw">if</span> <span class="op">!</span><span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">fits</span>(<span class="ident"><span class="self">Self</span>::OUTLINE_HANDLE_LAYOUT</span>) {
+                    <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">AllocError</span>);
+                }
+
+                <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">outline</span>.<span class="ident">allocate</span>(<span class="ident">new_layout</span>)<span class="question-mark">?</span>;
+                <span class="kw">let</span> <span class="ident">new_ptr</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">outline</span>.<span class="ident">resolve_mut</span>(<span class="ident">addr</span>, <span class="ident">new_layout</span>);
+                <span class="kw">let</span> <span class="ident">old_ptr</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">resolve_mut</span>(<span class="ident">handle</span>, <span class="ident">old_layout</span>);
+
+                <span class="ident">copy_nonoverlapping</span>(
+                    <span class="ident">old_ptr</span>.<span class="ident">as_mut_ptr</span>(),
+                    <span class="ident">new_ptr</span>.<span class="ident">as_mut_ptr</span>(),
+                    <span class="ident">old_layout</span>.<span class="ident">size</span>(),
+                );
+
+                <span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">deallocate</span>(<span class="ident">handle</span>, <span class="ident">old_layout</span>);
+                <span class="kw">let</span> <span class="ident">addr_handle</span> <span class="op">=</span> <span class="self">self</span>
+                    .<span class="ident">inline</span>
+                    .<span class="ident">allocate</span>(<span class="ident"><span class="self">Self</span>::OUTLINE_HANDLE_LAYOUT</span>)
+                    .<span class="ident">unwrap_unchecked</span>();
+                <span class="kw-2">*</span><span class="self">self</span>
+                    .<span class="ident">inline</span>
+                    .<span class="ident">resolve_mut</span>(<span class="ident">addr_handle</span>, <span class="ident"><span class="self">Self</span>::OUTLINE_HANDLE_LAYOUT</span>)
+                    .<span class="ident">as_mut_ptr</span>()
+                    .<span class="ident">cast</span>() <span class="op">=</span> <span class="ident">addr</span>;
+                <span class="prelude-val">Ok</span>(<span class="ident">addr_handle</span>)
+            },
         }
     }
 
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">destroy</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>) {
-        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">fits</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>(<span class="ident">handle</span>.<span class="ident">meta</span>) {
-            <span class="self">self</span>.<span class="ident">inline</span>
-                .<span class="ident">destroy</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>(<span class="ident">InlineStorageHandle::new</span>(<span class="ident">handle</span>.<span class="ident">meta</span>))
-        } <span class="kw">else</span> {
-            <span class="kw">let</span> <span class="ident">addr_handle</span> <span class="op">=</span> <span class="ident">InlineStorageHandle</span>::<span class="op">&lt;</span><span class="ident">NonNull</span><span class="op">&lt;</span>()<span class="op">&gt;</span><span class="op">&gt;</span><span class="ident">::new</span>(());
-            <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="kw-2">*</span><span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">resolve</span>(<span class="ident">addr_handle</span>).<span class="ident">as_ref</span>();
-            <span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">destroy</span>(<span class="ident">addr_handle</span>);
-            <span class="kw">let</span> <span class="ident">ptr</span> <span class="op">=</span> <span class="ident">NonNull</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="ident">::from_raw_parts</span>(<span class="ident">addr</span>, <span class="ident">handle</span>.<span class="ident">meta</span>);
-            <span class="self">self</span>.<span class="ident">outline</span>.<span class="ident">destroy</span>(<span class="ident">ptr</span>);
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">shrink</span>(
+        <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
+        <span class="ident">handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span>,
+        <span class="ident">old_layout</span>: <span class="ident">Layout</span>,
+        <span class="ident">new_layout</span>: <span class="ident">Layout</span>,
+    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Handle</span>, <span class="ident">AllocError</span><span class="op">&gt;</span> {
+        <span class="kw">match</span> (<span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">fits</span>(<span class="ident">old_layout</span>), <span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">fits</span>(<span class="ident">new_layout</span>)) {
+            (<span class="bool-val">true</span>, <span class="bool-val">true</span>) =&gt; <span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">shrink</span>(<span class="ident">handle</span>, <span class="ident">old_layout</span>, <span class="ident">new_layout</span>),
+            (<span class="bool-val">true</span>, <span class="bool-val">false</span>) =&gt; <span class="ident">unreachable_unchecked</span>(),
+            (<span class="bool-val">false</span>, <span class="bool-val">false</span>) =&gt; {
+                <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="self">self</span>
+                    .<span class="ident">inline</span>
+                    .<span class="ident">resolve_mut</span>(<span class="ident">handle</span>, <span class="ident"><span class="self">Self</span>::OUTLINE_HANDLE_LAYOUT</span>)
+                    .<span class="ident">as_mut_ptr</span>()
+                    .<span class="ident">cast</span>();
+                <span class="kw-2">*</span><span class="ident">addr</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">outline</span>.<span class="ident">shrink</span>(<span class="kw-2">*</span><span class="ident">addr</span>, <span class="ident">old_layout</span>, <span class="ident">new_layout</span>)<span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>(<span class="ident">handle</span>)
+            },
+            (<span class="bool-val">false</span>, <span class="bool-val">true</span>) =&gt; {
+                <span class="macro">todo!</span>();
+            },
         }
-    }
-
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">resolve</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>) -&gt; <span class="ident">NonNull</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
-        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">fits</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>(<span class="ident">handle</span>.<span class="ident">meta</span>) {
-            <span class="self">self</span>.<span class="ident">inline</span>
-                .<span class="ident">resolve</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>(<span class="ident">InlineStorageHandle::new</span>(<span class="ident">handle</span>.<span class="ident">meta</span>))
-        } <span class="kw">else</span> {
-            <span class="kw">let</span> <span class="ident">addr_handle</span> <span class="op">=</span> <span class="ident">InlineStorageHandle</span>::<span class="op">&lt;</span><span class="ident">NonNull</span><span class="op">&lt;</span>()<span class="op">&gt;</span><span class="op">&gt;</span><span class="ident">::new</span>(());
-            <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="kw-2">*</span><span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">resolve</span>(<span class="ident">addr_handle</span>).<span class="ident">as_ref</span>();
-            <span class="kw">let</span> <span class="ident">ptr</span> <span class="op">=</span> <span class="ident">NonNull</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="ident">::from_raw_parts</span>(<span class="ident">addr</span>, <span class="ident">handle</span>.<span class="ident">meta</span>);
-            <span class="self">self</span>.<span class="ident">outline</span>.<span class="ident">resolve</span>(<span class="ident">ptr</span>)
-        }
-    }
-
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">resolve_mut</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">handle</span>: <span class="ident"><span class="self">Self</span>::Handle</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>) -&gt; <span class="ident">NonNull</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
-        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">fits</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>(<span class="ident">handle</span>.<span class="ident">meta</span>) {
-            <span class="self">self</span>.<span class="ident">inline</span>
-                .<span class="ident">resolve_mut</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>(<span class="ident">InlineStorageHandle::new</span>(<span class="ident">handle</span>.<span class="ident">meta</span>))
-        } <span class="kw">else</span> {
-            <span class="kw">let</span> <span class="ident">addr_handle</span> <span class="op">=</span> <span class="ident">InlineStorageHandle</span>::<span class="op">&lt;</span><span class="ident">NonNull</span><span class="op">&lt;</span>()<span class="op">&gt;</span><span class="op">&gt;</span><span class="ident">::new</span>(());
-            <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="kw-2">*</span><span class="self">self</span>.<span class="ident">inline</span>.<span class="ident">resolve</span>(<span class="ident">addr_handle</span>).<span class="ident">as_ref</span>();
-            <span class="kw">let</span> <span class="ident">ptr</span> <span class="op">=</span> <span class="ident">NonNull</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="ident">::from_raw_parts</span>(<span class="ident">addr</span>, <span class="ident">handle</span>.<span class="ident">meta</span>);
-            <span class="self">self</span>.<span class="ident">outline</span>.<span class="ident">resolve_mut</span>(<span class="ident">ptr</span>)
-        }
-    }
-}
-
-<span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span> <span class="ident">Handle</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">SmallStorageHandle</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
-    <span class="kw">fn</span> <span class="ident">metadata</span>(<span class="self">self</span>) -&gt; <span class="op">&lt;</span><span class="ident">T</span> <span class="kw">as</span> <span class="ident">Pointee</span><span class="op">&gt;</span><span class="ident">::Metadata</span> {
-        <span class="self">self</span>.<span class="ident">meta</span>
-    }
-}
-
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span> <span class="ident">SmallStorageHandle</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">meta</span>: <span class="op">&lt;</span><span class="ident">T</span> <span class="kw">as</span> <span class="ident">Pointee</span><span class="op">&gt;</span><span class="ident">::Metadata</span>) -&gt; <span class="self">Self</span> {
-        <span class="ident">SmallStorageHandle</span> { <span class="ident">meta</span> }
-    }
-}
-
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span> <span class="ident">Copy</span> <span class="kw">for</span> <span class="ident">SmallStorageHandle</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {}
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span> <span class="ident">Clone</span> <span class="kw">for</span> <span class="ident">SmallStorageHandle</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
-    <span class="kw">fn</span> <span class="ident">clone</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span> {
-        <span class="kw-2">*</span><span class="self">self</span>
-    }
-}
-
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span> <span class="ident">Eq</span> <span class="kw">for</span> <span class="ident">SmallStorageHandle</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {}
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span> <span class="ident">PartialEq</span> <span class="kw">for</span> <span class="ident">SmallStorageHandle</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
-    <span class="kw">fn</span> <span class="ident">eq</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">rhs</span>: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; <span class="ident">bool</span> {
-        <span class="self">self</span>.<span class="ident">meta</span> <span class="op">==</span> <span class="ident">rhs</span>.<span class="ident">meta</span>
-    }
-}
-
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span> <span class="ident">PartialOrd</span> <span class="kw">for</span> <span class="ident">SmallStorageHandle</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
-    <span class="kw">fn</span> <span class="ident">partial_cmp</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">rhs</span>: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Ordering</span><span class="op">&gt;</span> {
-        <span class="prelude-val">Some</span>(<span class="self">self</span>.<span class="ident">cmp</span>(<span class="ident">rhs</span>))
-    }
-}
-
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span> <span class="ident">Ord</span> <span class="kw">for</span> <span class="ident">SmallStorageHandle</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
-    <span class="kw">fn</span> <span class="ident">cmp</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">rhs</span>: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; <span class="ident">Ordering</span> {
-        <span class="self">self</span>.<span class="ident">meta</span>.<span class="ident">cmp</span>(<span class="kw-2">&amp;</span><span class="ident">rhs</span>.<span class="ident">meta</span>)
     }
 }
 </code></pre></div>
-</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="storage_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.62.0-nightly (52ca603da 2022-04-12)" ></div>
+</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="storage_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.62.0-nightly (311e2683e 2022-04-18)" ></div>
 </body></html>
