@@ -78,6 +78,7 @@
 <span id="73">73</span>
 <span id="74">74</span>
 <span id="75">75</span>
+<span id="76">76</span>
 </pre><pre class="rust"><code><span class="kw">use</span> {
     <span class="kw">crate</span>::{<span class="ident">polyfill::layout_fits_in</span>, <span class="ident">Memory</span>, <span class="ident">Storage</span>},
     <span class="ident">core</span>::{
@@ -92,12 +93,13 @@
 <span class="doccomment">/// The `DataStore` type parameter determines the layout of the inline storage.</span>
 <span class="doccomment">/// (It would be nice to use `const LAYOUT: Layout` instead, but the needed</span>
 <span class="doccomment">/// features are currently a little *too* incomplete to be usable here yet.)</span>
+<span class="attribute">#[<span class="ident">repr</span>(<span class="ident">transparent</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">InlineStorage</span><span class="op">&lt;</span><span class="ident">DataStore</span><span class="op">&gt;</span> {
     <span class="ident">data</span>: <span class="ident">MaybeUninit</span><span class="op">&lt;</span><span class="ident">DataStore</span><span class="op">&gt;</span>,
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">DataStore</span><span class="op">&gt;</span> <span class="ident">InlineStorage</span><span class="op">&lt;</span><span class="ident">DataStore</span><span class="op">&gt;</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>() -&gt; <span class="self">Self</span> {
+    <span class="kw">pub</span> <span class="kw">const</span> <span class="kw">fn</span> <span class="ident">new</span>() -&gt; <span class="self">Self</span> {
         <span class="self">Self</span> {
             <span class="ident">data</span>: <span class="ident">MaybeUninit::uninit</span>(),
         }
@@ -154,5 +156,5 @@
     }
 }
 </code></pre></div>
-</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="storage_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.62.0-nightly (311e2683e 2022-04-18)" ></div>
+</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="storage_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.62.0-nightly (4dd8b420c 2022-05-01)" ></div>
 </body></html>
