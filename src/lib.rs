@@ -23,6 +23,7 @@
     allocator_api,
     dropck_eyepatch,
     extern_types,
+    generic_const_exprs,
     layout_for_ptr,
     let_chains,
     maybe_uninit_array_assume_init,
@@ -41,6 +42,7 @@
 
 mod alloc;
 mod borrowed;
+mod dynamic;
 mod inline;
 mod polyfill;
 mod raw_box;
@@ -52,8 +54,9 @@ mod traits;
 pub use crate::{
     alloc::{AllocHandle, AllocStorage},
     borrowed::BorrowedStorage,
+    dynamic::DynStorage,
     inline::InlineStorage,
-    raw_box::RawBox,
+    raw_box::{Box, RawBox},
     raw_vec::RawVec,
     small::SmallStorage,
     traits::{Memory, MultipleStorage, PinningStorage, SharedMutabilityStorage, Storage},

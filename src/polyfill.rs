@@ -21,3 +21,23 @@ pub(crate) unsafe fn layout_for_metadata<T: ?Sized>(
 pub(crate) fn layout_fits_in(inner: Layout, outer: Layout) -> bool {
     inner.align() <= outer.align() && inner.size() <= outer.size()
 }
+
+// CRIMES 😈😈😈😈😈😈
+extern "Rust" {
+    // This is the magic symbol to call the global alloc error handler.  rustc generates
+    // it to call `__rg_oom` if there is a `#[alloc_error_handler]`, or to call the
+    // default implementations below (`__rdl_oom`) otherwise.
+    fn __rust_alloc_error_handler(size: usize, align: usize) -> !;
+}
+
+pub(crate) fn handle_alloc_error(layout: Layout) -> ! {
+    unsafe { __rust_alloc_error_handler(layout.size(), layout.align()) }
+}
+
+pub const fn is_zst<T: Copy>() -> bool {
+    core::mem::size_of::<T>() == 0
+}
+
+pub struct Bool<const B: bool>;
+pub trait True {}
+impl True for Bool<true> {}

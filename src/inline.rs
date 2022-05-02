@@ -12,12 +12,13 @@ use {
 /// The `DataStore` type parameter determines the layout of the inline storage.
 /// (It would be nice to use `const LAYOUT: Layout` instead, but the needed
 /// features are currently a little *too* incomplete to be usable here yet.)
+#[repr(transparent)]
 pub struct InlineStorage<DataStore> {
     data: MaybeUninit<DataStore>,
 }
 
 impl<DataStore> InlineStorage<DataStore> {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             data: MaybeUninit::uninit(),
         }
